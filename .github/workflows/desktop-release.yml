@@ -8,18 +8,16 @@ on:
       - "desktop-v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  publish-release:
+  build-release:
     if: ${{ startsWith(github.ref_name, 'desktop-v') || !contains(github.ref_name, '-') }}
     runs-on: windows-latest
     env:
       AI_NOVEL_RELEASE_CHANNEL: release
       AI_NOVEL_ALLOW_UNSIGNED_RELEASE: "true"
-      AI_NOVEL_GITHUB_OWNER: ExplosiveCoderflome
-      AI_NOVEL_GITHUB_REPO: AI-Novel-Writing-Assistant
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      OXNOVEL_DESKTOP_UPDATE_URL: ${{ secrets.OXNOVEL_DESKTOP_UPDATE_URL }}
       CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
     steps:
@@ -60,8 +58,12 @@ jobs:
       - name: Verify packaged desktop layout
         run: pnpm verify:desktop-package:reuse-stage
 
-      - name: Publish desktop release to GitHub Releases
-        run: pnpm publish:desktop:release:reuse-stage
+      - name: Build desktop release artifacts
+        run: pnpm dist:desktop:reuse-stage
 
-      - name: Update GitHub release notes
-        run: node scripts/update-desktop-release-notes.cjs
+      - name: Preserve desktop release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: 0xNovelAgent-Windows-${{ github.ref_name }}
+          path: desktop/build/dist/*
+          if-no-files-found: error

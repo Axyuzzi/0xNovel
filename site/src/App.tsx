@@ -5,14 +5,12 @@ import {
   CheckCircle2,
   Download,
   FileText,
-  Github,
+  GitFork,
   PenLine,
   Sparkles,
-  Star,
 } from "lucide-react";
 import { useEffect, useSyncExternalStore } from "react";
 import appIcon from "./assets/app-icon.png";
-import { formatStarCount, useGithubStars } from "./hooks/useGithubStars";
 import { usePageMeta } from "./hooks/usePageMeta";
 import DocsPage from "./DocsPage";
 import { docsPath, isSitePath, parseRoute, sitePath } from "./routing";
@@ -20,8 +18,8 @@ import chapterExecutionImage from "./assets/chapter-execution.png";
 import creativeHubImage from "./assets/creative-hub.png";
 import directorChoiceImage from "./assets/director-choice.png";
 
-const repoUrl = "https://github.com/ExplosiveCoderflome/AI-Novel-Writing-Assistant";
-const releaseUrl = `${repoUrl}/releases/latest`;
+const repoUrl = "https://gitee.com/b497021499/0xnovel";
+const releaseUrl = `${repoUrl}/releases`;
 const docsIntroBannerImage = `${import.meta.env.BASE_URL}assets/docs-intro-banner.png`;
 
 const proofItems = [
@@ -156,7 +154,6 @@ function App({ initialPath }: AppProps) {
 }
 
 function SiteNav({ page }: { page: "home" | "docs" }) {
-  const stars = useGithubStars("ExplosiveCoderflome", "AI-Novel-Writing-Assistant");
   return (
     <nav className="site-nav" aria-label="主导航">
       <a className="brand" href={sitePath("/")} aria-label="0xNovelAgent首页">
@@ -176,15 +173,9 @@ function SiteNav({ page }: { page: "home" | "docs" }) {
         ) : (
           <a href={releaseUrl}>下载桌面版</a>
         )}
-        <a className="nav-github" href={repoUrl} aria-label={stars !== null ? `GitHub · ${stars} stars` : "GitHub"}>
-          <Github size={15} />
-          <span>GitHub</span>
-          {stars !== null ? (
-            <span className="nav-stars">
-              <Star size={11} strokeWidth={2.4} />
-              {formatStarCount(stars)}
-            </span>
-          ) : null}
+        <a className="nav-github" href={repoUrl} aria-label="Gitee 仓库">
+          <GitFork size={15} />
+          <span>Gitee</span>
         </a>
       </div>
     </nav>
@@ -192,7 +183,6 @@ function SiteNav({ page }: { page: "home" | "docs" }) {
 }
 
 function HomePage() {
-  const stars = useGithubStars("ExplosiveCoderflome", "AI-Novel-Writing-Assistant");
   usePageMeta(null);
   return (
     <>
@@ -215,24 +205,13 @@ function HomePage() {
               下载桌面版
             </a>
             <a className="button ghost" href={repoUrl}>
-              <Github size={18} />
-              查看 GitHub
+              <GitFork size={18} />
+              查看 Gitee
             </a>
             <a className="button ghost" href={docsPath()}>
               <FileText size={18} />
               阅读文档
             </a>
-            {stars !== null ? (
-              <a
-                className="button star"
-                href={`${repoUrl}/stargazers`}
-                aria-label={`GitHub ${stars} 颗 star`}
-              >
-                <Star size={18} strokeWidth={2.2} />
-                <span>给个 Star</span>
-                <span className="star-count">{formatStarCount(stars)}</span>
-              </a>
-            ) : null}
           </div>
           <div className="route-strip" aria-label="核心生产路径">
             <span>灵感</span>
@@ -367,7 +346,7 @@ function HomePage() {
             下载桌面版
           </a>
           <a className="button ghost" href={repoUrl}>
-            <Github size={18} />
+            <GitFork size={18} />
             查看源码
           </a>
         </div>

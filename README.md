@@ -32,8 +32,8 @@
 
 如果你只是想直接下载安装并开始使用，优先从桌面版入口进入：
 
-- 下载入口：[GitHub Releases](https://github.com/ExplosiveCoderflome/AI-Novel-Writing-Assistant/releases)
-- 最新版本页：[Latest Release](https://github.com/ExplosiveCoderflome/AI-Novel-Writing-Assistant/releases/latest)
+- 项目仓库：[Gitee 私有仓库](https://gitee.com/b497021499/0xnovel)
+- 桌面版本：[Gitee Releases](https://gitee.com/b497021499/0xnovel/releases)
 - 建议优先下载 `Setup.exe` 安装版；如果你不想安装，或者想放在 U 盘 / 临时目录里直接运行，再选择 `portable` 版本
 - 公开介绍站：[GitHub Pages 介绍站](https://explosivecoderflome.github.io/AI-Novel-Writing-Assistant/) 提供功能预览、模块文档和使用指南
 
@@ -145,6 +145,7 @@
 - 产品界面、网页标题、公开文档、包名和桌面程序统一使用 `0xNovelAgent`。
 - Windows 安装包、便携包、快捷方式、启动页和项目内图标已换成新的 `0x` 品牌素材，并修复打包后的本地服务启动。
 - 自定义模型供应商会持久保存已获取的完整模型列表，重新进入模型路由页面后仍可为同一供应商选择多个模型。
+- 项目入口和桌面更新来源已切换到自有 Gitee 仓库；未配置专用更新文件地址的安装包不会访问原 GitHub 更新源。
 
 > 查看完整更新历史：[docs/releases/release-notes.md](./docs/releases/release-notes.md)
 

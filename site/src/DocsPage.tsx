@@ -13,7 +13,7 @@ import { docsManifest, flattenedDocs } from "./docsManifest";
 import { usePageMeta } from "./hooks/usePageMeta";
 import { docsPath, sitePath } from "./routing";
 
-const repoUrl = "https://github.com/ExplosiveCoderflome/AI-Novel-Writing-Assistant";
+const repoUrl = "https://gitee.com/b497021499/0xnovel";
 
 type DocsPageProps = {
   docId?: string;
@@ -233,7 +233,7 @@ export default function DocsPage({ docId }: DocsPageProps) {
               <div className="doc-meta">
                 <Breadcrumb categoryTitle={activeDoc.categoryTitle} docTitle={activeDoc.title} />
                 <a href={`${repoUrl}/blob/main/${activeDoc.githubPath}`}>
-                  GitHub 原文
+                  Gitee 原文
                   <ArrowRight size={15} />
                 </a>
               </div>

@@ -87,13 +87,13 @@
 
 普通用户优先使用 Windows 桌面版：
 
-- 最新版本页：[GitHub Releases](https://github.com/ExplosiveCoderflome/AI-Novel-Writing-Assistant/releases/latest)
+- 最新版本页：[Gitee Releases](https://gitee.com/b497021499/0xnovel/releases)
 - 建议优先下载安装版。
 - 不想安装时，可以选择 portable 版本直接运行。
 
 源码和项目仓库：
 
-[0xNovelAgent](https://github.com/ExplosiveCoderflome/AI-Novel-Writing-Assistant)
+[0xNovelAgent](https://gitee.com/b497021499/0xnovel)
 
 ## 下一步阅读
 

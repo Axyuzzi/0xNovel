@@ -45,7 +45,7 @@ export function initializeDesktopUpdater(options: DesktopUpdaterOptions): Deskto
     : options.isPortable
       ? "Portable builds stay on manual updates and are excluded from auto-update."
       : !hasFeedConfig
-        ? "This build does not include an update feed yet. Publish it through the beta release pipeline first."
+        ? "This build does not include an owned update feed. Download updates manually from the 0xNovelAgent Gitee repository."
         : "Updates are disabled by environment configuration.";
 
   markUpdaterSnapshot(createUpdaterSnapshot({
@@ -87,11 +87,11 @@ export function initializeDesktopUpdater(options: DesktopUpdaterOptions): Deskto
   autoUpdater.allowPrerelease = options.updateChannel === "beta";
 
   autoUpdater.on("checking-for-update", () => {
-    appendDesktopLog("desktop.updater", "Checking GitHub Releases for desktop updates.");
+    appendDesktopLog("desktop.updater", "Checking the configured 0xNovelAgent update feed.");
     markUpdaterSnapshot(createUpdaterSnapshot({
       ...desktopUpdaterStore.getSnapshot(),
       status: "checking",
-      message: "Checking GitHub Releases for a newer desktop build.",
+      message: "Checking the configured 0xNovelAgent update feed for a newer desktop build.",
       canInstall: false,
       lastCheckedAt: new Date().toISOString(),
       progressPercent: null,

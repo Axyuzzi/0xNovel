@@ -11,8 +11,11 @@ function firstNonEmpty(...values) {
 
 const releaseChannel = firstNonEmpty(process.env.AI_NOVEL_RELEASE_CHANNEL, "beta").toLowerCase();
 const isBetaRelease = releaseChannel === "beta";
-const githubOwner = firstNonEmpty(process.env.AI_NOVEL_GITHUB_OWNER, "ExplosiveCoderflome");
-const githubRepo = firstNonEmpty(process.env.AI_NOVEL_GITHUB_REPO, "AI-Novel-Writing-Assistant");
+const updaterChannel = isBetaRelease ? "beta" : "latest";
+const desktopUpdateUrl = firstNonEmpty(
+  process.env.OXNOVEL_DESKTOP_UPDATE_URL,
+  process.env.AI_NOVEL_DESKTOP_UPDATE_URL,
+);
 const windowsSigningLink = firstNonEmpty(
   process.env.CSC_LINK,
   process.env.WIN_CSC_LINK,
@@ -55,10 +58,12 @@ module.exports = {
       from: "builder/app-icon-256.png",
       to: "icons/app-icon.png",
     },
-    {
-      from: "build/resources/app-update.yml",
-      to: "app-update.yml",
-    },
+    ...(desktopUpdateUrl
+      ? [{
+          from: "build/resources/app-update.yml",
+          to: "app-update.yml",
+        }]
+      : []),
     {
       from: "build/resources/client",
       to: "client",
@@ -75,14 +80,15 @@ module.exports = {
   extraMetadata: {
     main: "dist/main.js",
   },
-  publish: [
-    {
-      provider: "github",
-      owner: githubOwner,
-      repo: githubRepo,
-      releaseType: isBetaRelease ? "prerelease" : "release",
-    },
-  ],
+  ...(desktopUpdateUrl
+    ? {
+        publish: [{
+          provider: "generic",
+          url: desktopUpdateUrl,
+          channel: updaterChannel,
+        }],
+      }
+    : {}),
   electronUpdaterCompatibility: ">=2.16",
   generateUpdatesFilesForAllChannels: false,
   win: {

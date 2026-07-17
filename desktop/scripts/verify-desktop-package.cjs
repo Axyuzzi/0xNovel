@@ -62,7 +62,6 @@ function assertSomeMatch(entries, pattern, description) {
 function main() {
   assertExists(appPackageJsonPath, "staged desktop package.json");
   assertExists(builderWindowIcon, "builder desktop window icon");
-  assertExists(stagedAppUpdateConfig, "staged updater feed configuration");
   assertExists(stagedClientIndex, "staged renderer index");
   assertExists(unpackedClientIndex, "packaged renderer index");
   assertExists(unpackedAppArchive, "packaged app archive");
@@ -90,9 +89,14 @@ function main() {
   if (stagedClientIndexSource.includes('src="/assets/') || stagedClientIndexSource.includes('href="/assets/')) {
     throw new Error("Packaged desktop renderer still references absolute /assets paths.");
   }
-  const updaterConfigSource = fs.readFileSync(stagedAppUpdateConfig, "utf8");
-  if (!updaterConfigSource.includes("provider: github")) {
-    throw new Error("Desktop updater feed configuration is missing the GitHub provider.");
+  if (fs.existsSync(stagedAppUpdateConfig)) {
+    const updaterConfigSource = fs.readFileSync(stagedAppUpdateConfig, "utf8");
+    if (!updaterConfigSource.includes("provider: generic") || !updaterConfigSource.includes("url:")) {
+      throw new Error("Desktop updater feed configuration must use an explicit generic update URL.");
+    }
+    if (updaterConfigSource.includes("ExplosiveCoderflome") || updaterConfigSource.includes("AI-Novel-Writing-Assistant")) {
+      throw new Error("Desktop updater feed must not reference the former upstream repository.");
+    }
   }
 
   const packagedFiles = new Set(asar.listPackage(unpackedAppArchive).map((entry) => entry.replace(/^\\/, "").replace(/\\/g, "/")));

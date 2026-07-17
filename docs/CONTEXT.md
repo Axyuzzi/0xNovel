@@ -20,6 +20,8 @@
 - 使用仓库声明的 Node.js 版本范围和 `pnpm@10.6.0`。
 - UI 文案从用户任务和下一步行动出发，避免开发过程叙述。
 - 桌面版本号以 `desktop/package.json` 为准；公开发布标签必须与版本号匹配。
+- 主仓库为 `https://gitee.com/b497021499/0xnovel.git`；原 GitHub 仓库只保留为本地 `upstream` 参考，禁止向其推送。
+- 私密仓库不能把访问令牌内置到 EXE；自动更新必须通过 `OXNOVEL_DESKTOP_UPDATE_URL` 指向可匿名读取的自有通用更新目录。
 
 ## 环境信息
 

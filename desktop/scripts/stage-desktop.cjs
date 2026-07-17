@@ -58,17 +58,29 @@ function replaceFileContents(targetPath, contents) {
   fs.writeFileSync(targetPath, contents, "utf8");
 }
 
+function resolveDesktopUpdateUrl() {
+  return (
+    process.env.OXNOVEL_DESKTOP_UPDATE_URL
+    || process.env.AI_NOVEL_DESKTOP_UPDATE_URL
+    || ""
+  ).trim();
+}
+
 function writeDesktopUpdaterConfig() {
   const releaseChannel = (process.env.AI_NOVEL_RELEASE_CHANNEL || "beta").trim().toLowerCase();
-  const releaseType = releaseChannel === "beta" ? "prerelease" : "release";
-  const owner = (process.env.AI_NOVEL_GITHUB_OWNER || "ExplosiveCoderflome").trim();
-  const repo = (process.env.AI_NOVEL_GITHUB_REPO || "AI-Novel-Writing-Assistant").trim();
+  const updaterChannel = releaseChannel === "beta" ? "beta" : "latest";
+  const updateUrl = resolveDesktopUpdateUrl();
+
+  if (!updateUrl) {
+    fs.rmSync(appUpdateConfigPath, { force: true });
+    console.log("[stage:desktop] updater disabled: OXNOVEL_DESKTOP_UPDATE_URL is not configured.");
+    return;
+  }
+
   const config = [
-    "provider: github",
-    `owner: ${owner}`,
-    `repo: ${repo}`,
-    `channel: ${releaseChannel}`,
-    `releaseType: ${releaseType}`,
+    "provider: generic",
+    `url: ${JSON.stringify(updateUrl)}`,
+    `channel: ${updaterChannel}`,
     "updaterCacheDirName: 0xnovelagent-updater",
     "",
   ].join("\n");
@@ -247,7 +259,9 @@ function main() {
   assertExists(desktopMainEntry, "desktop main bundle");
   assertExists(serverEntry, "bundled server entry");
   assertExists(path.join(clientTargetDir, "index.html"), "bundled renderer entry");
-  assertExists(appUpdateConfigPath, "desktop updater configuration");
+  if (resolveDesktopUpdateUrl()) {
+    assertExists(appUpdateConfigPath, "desktop updater configuration");
+  }
   assertExists(path.join(stagedNodeModulesDir, ".prisma", "client", "default.js"), "bundled Prisma runtime");
   const [firstStagedPrismaClientPackage] = resolveStagedPrismaClientPackageDirs();
   assertExists(
