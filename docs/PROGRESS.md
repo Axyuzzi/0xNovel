@@ -1,0 +1,11 @@
+# 功能进度看板
+
+> 最后更新：2026-07-17
+
+| 功能 | 状态 | 涉及文件 | 文档 |
+|------|------|----------|------|
+| 项目品牌统一为 `0xNovelAgent` | 完成 | 根清单与锁文件、`client/`、`server/`、`shared/`、`desktop/`、`site/`、公开文档与发布说明 | 根级类型检查、站点类型检查、依赖检查通过 |
+| `0xNovelAgent` 桌面与项目图标 | 完成 | `images/brand/`、`desktop/builder/`、`desktop/scripts/generate-desktop-icons.py`、客户端与官网图标资源 | 黑白横向 Logo 已拆分；SVG `0x` 已生成多尺寸 EXE、favicon 与 Web App 图标 |
+| 桌面打包作用域兼容修复 | 完成 | `desktop/scripts/stage-desktop.cjs`、`desktop/electron-builder.config.cjs`、`desktop/scripts/verify-desktop-package.cjs` | 旧 workspace 作用域已清理；Electron 原生预编译依赖自动暂存；Windows 安装版与便携版通过结构校验；[打包说明](wiki/debugging/desktop-packaging-native-dependencies.md) |
+| 最终品牌名与桌面启动修复 | 完成 | 项目品牌文本、`client/src/components/layout/DesktopBrandMark.tsx`、`desktop/src/runtime/paths.ts`、`desktop/src/main.ts`、桌面打包资源 | 最终名称已更正为 `0xNovelAgent`；启动图标统一使用 `0x` 母版；打包服务器健康检查与真实启动烟测通过 |
+| 自定义供应商多模型列表持久化 | 完成 | `server/src/services/settings/ProviderModelCatalogService.ts`、供应商设置路由、路由测试 | 创建、保存或刷新供应商后会保留完整模型列表，重新进入模型路由页面仍可下拉选择同一供应商的多个模型 |

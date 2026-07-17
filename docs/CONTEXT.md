@@ -1,0 +1,29 @@
+# 0xNovelAgent 项目上下文
+
+## 项目概述
+
+`0xNovelAgent` 是一个面向小说创作新手的 AI 原生长篇小说生产系统，目标是通过规划、角色、世界观、章节生产、质量修复和知识库等能力，帮助用户完成整部长篇小说。
+
+## 技术架构
+
+- pnpm workspace Monorepo
+- `client/`：React + Vite Web 客户端
+- `server/`：Node.js + Express + Prisma 服务端
+- `shared/`：前后端共享类型与契约
+- `desktop/`：Electron Windows 桌面运行时与打包配置
+- `site/`：公开介绍站
+- 默认本地开发端口：前端 `5173`，后端 `3000`
+
+## 开发约定
+
+- 优先遵守仓库根目录 `AGENTS.md` 中的安全、架构、产品与发布规则。
+- 使用仓库声明的 Node.js 版本范围和 `pnpm@10.6.0`。
+- UI 文案从用户任务和下一步行动出发，避免开发过程叙述。
+- 桌面版本号以 `desktop/package.json` 为准；公开发布标签必须与版本号匹配。
+
+## 环境信息
+
+- Web 开发：`pnpm dev`
+- Electron 桌面开发：`pnpm dev:desktop`
+- Windows 安装包：`pnpm dist:desktop:nsis`
+- Windows 便携包：`pnpm dist:desktop:portable`
