@@ -12,4 +12,4 @@
 | 自有仓库与桌面更新源切换 | 完成 | Git 远程、项目仓库入口、桌面打包与更新运行时 | 主仓库切换到私有 Gitee；自动更新仅接受显式配置的自有通用更新地址，默认不会访问原 GitHub |
 | 桌面端用户级 `sk-` Token、同步注册与充值闭环 | 📋 计划中 | `desktop/`、`server/src/relay/`、`client/src/pages/auth/`、`client/src/pages/account/`、`shared/types/` | [实施方案](wiki/architecture/desktop-user-token-auth-plan.md)；设备 Key 已废弃，已确定单窗口静默启动、强制登录与加密 Token 保持登录，等待中转站字段、币种与幂等契约确认 |
 | C 端新手自适应首页与四入口导航 | 📋 计划中 | `client/src/pages/Home.tsx`、首页组件、客户端导航与状态层 | [产品原则](wiki/product/beginner-first-novel-completion.md#统一自适应首页)；统一首页按新用户、最近作品、生成恢复、离线和余额状态切换主动作 |
-| C 端单作品文档型创作台 | 📋 计划中 | `client/src/pages/novels/`、作品工作区组件、编辑器与 AI 助手 | [产品原则](wiki/product/beginner-first-novel-completion.md#单作品文档型创作台)；左侧内容树、中间统一编辑器、右侧按需 AI，专业导演与修复状态下沉 |
+| C 端单作品文档型创作台 | 📋 计划中 | `client/src/pages/novels/`、作品工作区组件、编辑器、版本历史与 AI 助手 | [产品原则](wiki/product/beginner-first-novel-completion.md#单作品文档型创作台)；左侧内容树、中间统一编辑器、右侧按需 AI；AI 修改先预览，采用前保存版本，专业导演与修复状态下沉 |
