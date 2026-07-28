@@ -19,4 +19,4 @@
 | C 端一句话新书创建 | 📋 计划中 | 新书创建页、方向候选、创建草稿与付费恢复 | [产品合同](wiki/product/beginner-first-novel-completion.md#一句话新书创建)；内容决策只要求故事想法和方向，故事方向、全书骨架、全部卷规划、当前剧情阶段和第一章分别由用户确认后付费生成 |
 | C 端新书四层滚动规划 | 📋 计划中 | 故事宏观规划、卷战略与骨架、节奏板、章节执行合同 | [产品合同](wiki/product/beginner-first-novel-completion.md#新书四层规划合同)；第一章前生成全书骨架和全部卷规划，只细化当前剧情阶段，下一章任务按需生成 |
 | C 端后续剧情调整与最小影响重规划 | 📋 计划中 | 规划版本、影响范围判断、未执行任务失效与连续创作暂停点 | [产品合同](wiki/product/beginner-first-novel-completion.md#调整后续剧情)；用户只描述变化，系统判断最小未来影响范围，保护已完成内容并给出一套推荐方案 |
-| C 端单作品文档型创作台 | 📋 计划中 | `client/src/pages/novels/`、作品工作区组件、编辑器、版本历史与 AI 助手 | [产品原则](wiki/product/beginner-first-novel-completion.md#单作品文档型创作台)；第一版逐章确认，章节必要模型调用按本章汇总为 0x积分消费，流式正文持续本地保存，中断后从已有正文续写 |
+| C 端单作品文档型创作台 | 📋 计划中 | `client/src/pages/novels/`、作品工作区组件、编辑器、候选稿、版本历史与 AI 助手 | [产品原则](wiki/product/beginner-first-novel-completion.md#ai-内容写入边界)；正文始终可编辑，AI 修改先生成候选稿，采用前不覆盖正文；自动保存与历史版本分离，章节调用汇总为本章 0x积分消费 |
