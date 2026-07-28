@@ -12,6 +12,7 @@
 | 自有仓库与桌面更新源切换 | 完成 | Git 远程、项目仓库入口、桌面打包与更新运行时 | 主仓库切换到私有 Gitee；自动更新仅接受显式配置的自有通用更新地址，默认不会访问原 GitHub |
 | 商业 SaaS 外联与许可证审计 | 🚧 进行中 | 桌面运行时、公开站、发布流程、外部请求、`LICENSE` / `NOTICE` | [风险审计](wiki/security/commercial-saas-risk-audit.md)；原作者公开站和非必要代理外联已清理并加入回归检查，商业授权仍是收费上线 P0 阻断项 |
 | 桌面端用户级 `sk-` Token、同步注册与充值闭环 | 📋 计划中 | `desktop/`、`server/src/relay/`、`client/src/pages/auth/`、`client/src/pages/account/`、`shared/types/` | [实施方案](wiki/architecture/desktop-user-token-auth-plan.md)；设备 Key 已废弃，已确定单窗口静默启动、强制登录与加密 Token 保持登录，等待中转站字段、币种与幂等契约确认 |
+| C 端 AI 唯一中转出口 | 📋 计划中 | `server/src/relay/llm/`、LLM 工厂与模型路由、客户端模型设置、正式构建边界 | [唯一出口决策](wiki/architecture/desktop-user-token-auth-plan.md#131-正式-c-端唯一-ai-出口)；正式产品取消用户 API Key、供应商直连、自定义 Provider 和专家开关，所有 AI 能力只走自有中转并由本机服务强制校验 |
 | C 端全新本地数据域 | 📋 计划中 | `desktop/src/runtime/`、本地数据库路径、作品用户归属 | [数据边界](wiki/architecture/desktop-user-token-auth-plan.md#全新本地数据域)；不迁移旧作品、任务和模型配置，新旧数据物理隔离且不自动删除旧数据 |
 | C 端新手自适应首页与四入口导航 | 📋 计划中 | `client/src/pages/Home.tsx`、首页组件、客户端导航与状态层 | [产品原则](wiki/product/beginner-first-novel-completion.md#统一自适应首页)；统一首页按新用户、最近作品、生成恢复、离线和余额状态切换主动作 |
 | C 端一句话新书创建 | 📋 计划中 | 新书创建页、方向候选、创建草稿与付费恢复 | [产品合同](wiki/product/beginner-first-novel-completion.md#一句话新书创建)；只要求输入故事想法并选择方向，其他偏好可选，模型和专业规划参数隐藏 |
