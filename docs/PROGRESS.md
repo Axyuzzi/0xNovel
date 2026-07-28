@@ -13,4 +13,5 @@
 | 桌面端用户级 `sk-` Token、同步注册与充值闭环 | 📋 计划中 | `desktop/`、`server/src/relay/`、`client/src/pages/auth/`、`client/src/pages/account/`、`shared/types/` | [实施方案](wiki/architecture/desktop-user-token-auth-plan.md)；设备 Key 已废弃，已确定单窗口静默启动、强制登录与加密 Token 保持登录，等待中转站字段、币种与幂等契约确认 |
 | C 端全新本地数据域 | 📋 计划中 | `desktop/src/runtime/`、本地数据库路径、作品用户归属 | [数据边界](wiki/architecture/desktop-user-token-auth-plan.md#全新本地数据域)；不迁移旧作品、任务和模型配置，新旧数据物理隔离且不自动删除旧数据 |
 | C 端新手自适应首页与四入口导航 | 📋 计划中 | `client/src/pages/Home.tsx`、首页组件、客户端导航与状态层 | [产品原则](wiki/product/beginner-first-novel-completion.md#统一自适应首页)；统一首页按新用户、最近作品、生成恢复、离线和余额状态切换主动作 |
+| C 端新书四层滚动规划 | 📋 计划中 | 故事宏观规划、卷战略与骨架、节奏板、章节执行合同 | [产品合同](wiki/product/beginner-first-novel-completion.md#新书四层规划合同)；第一章前生成全书骨架和全部卷规划，只细化当前剧情阶段，下一章任务按需生成 |
 | C 端单作品文档型创作台 | 📋 计划中 | `client/src/pages/novels/`、作品工作区组件、编辑器、版本历史与 AI 助手 | [产品原则](wiki/product/beginner-first-novel-completion.md#单作品文档型创作台)；默认逐章确认；连续创作受剧情阶段和人民币消费上限双重约束；深度审校由用户在阶段或卷末决定 |
