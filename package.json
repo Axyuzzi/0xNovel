@@ -30,6 +30,7 @@
     "build": "pnpm --filter @0xnovelagent/shared build && pnpm --filter @0xnovelagent/server build && pnpm --filter @0xnovelagent/client build",
     "build:site": "pnpm --filter @0xnovelagent/site build",
     "check:docs-manifest": "node scripts/check-docs-manifest.cjs",
+    "audit:commercial-egress": "node scripts/audit-commercial-egress.cjs",
     "build:desktop": "pnpm --filter @0xnovelagent/desktop build",
     "build:desktop:all": "pnpm --filter @0xnovelagent/shared build && pnpm --filter @0xnovelagent/server prisma:generate && pnpm --filter @0xnovelagent/server build && pnpm --filter @0xnovelagent/client build:desktop && pnpm --filter @0xnovelagent/desktop build",
     "stage:desktop": "pnpm run build:desktop:all && node desktop/scripts/stage-desktop.cjs",

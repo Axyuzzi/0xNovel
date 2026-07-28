@@ -35,7 +35,7 @@
 - 项目仓库：[Gitee 私有仓库](https://gitee.com/b497021499/0xnovel)
 - 桌面版本：[Gitee Releases](https://gitee.com/b497021499/0xnovel/releases)
 - 建议优先下载 `Setup.exe` 安装版；如果你不想安装，或者想放在 U 盘 / 临时目录里直接运行，再选择 `portable` 版本
-- 公开介绍站：[GitHub Pages 介绍站](https://explosivecoderflome.github.io/AI-Novel-Writing-Assistant/) 提供功能预览、模块文档和使用指南
+- 公开介绍站在发布时通过 `OXNOVEL_PUBLIC_SITE_URL` 显式配置自有域名；仓库不再默认指向原项目站点
 
 ## 项目定位
 
@@ -140,12 +140,12 @@
 
 完整历史更新见 [docs/releases/release-notes.md](./docs/releases/release-notes.md)。
 
-### 2026-07-17（0xNovelAgent 品牌、桌面端与模型配置）
+### 2026-07-28（自有站点与发布外联清理）
 
-- 产品界面、网页标题、公开文档、包名和桌面程序统一使用 `0xNovelAgent`。
-- Windows 安装包、便携包、快捷方式、启动页和项目内图标已换成新的 `0x` 品牌素材，并修复打包后的本地服务启动。
-- 自定义模型供应商会持久保存已获取的完整模型列表，重新进入模型路由页面后仍可为同一供应商选择多个模型。
-- 项目入口和桌面更新来源已切换到自有 Gitee 仓库；未配置专用更新文件地址的安装包不会访问原 GitHub 更新源。
+- 公开介绍站不再默认指向原项目 GitHub Pages，也不再请求第三方 GitHub 星标代理。
+- 只有发布方显式配置自有站点地址后，才会生成公开站 canonical、sitemap 和 robots 入口。
+- 站点与桌面发布会自动检查遗留的原项目公开地址，避免旧外联重新进入发布物。
+- 原项目许可证和版权声明继续保留；公开地址清理不改变商业授权义务。
 
 > 查看完整更新历史：[docs/releases/release-notes.md](./docs/releases/release-notes.md)
 
@@ -605,8 +605,7 @@ docs/     设计文档、阶段检查点、模块计划与历史归档
 - 强化写法引擎、知识库回灌和世界观一致性链路
 - 补充测试、错误回放和运行时可观察性
 
-欢迎直接提 Issue 或 Pull Request。
-提交 Pull Request 即表示你确认自己有权提交该内容，并已阅读且同意 [CLA.md](./CLA.md)；如果包含第三方代码、素材、AI 生成内容或其他受许可证约束的内容，请在 PR 中明确说明来源和许可证。详见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+欢迎先通过 Issue 提交建议和问题。商业授权主体与自有 CLA 完成前，外部代码 Pull Request 暂不合并；如果包含第三方代码、素材、AI 生成内容或其他受许可证约束的内容，仍需明确说明来源和许可证。详见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ## 致谢
 
@@ -627,4 +626,4 @@ docs/     设计文档、阶段检查点、模块计划与历史归档
 - 服务型商用：将本项目（或其修改版本）作为后端以 SaaS、托管或其他形式向第三方提供服务，须通过作者获取商业授权许可。
 - 请遵守开源协议条款，并在适用场景下取得相应授权。
 
-贡献说明：新贡献默认按 [CLA.md](./CLA.md) 提交，可随项目按 AGPL-3.0-only 分发，并可纳入项目维护者另行提供的商业授权；详见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+贡献说明：仓库中保留的 [CLA.md](./CLA.md) 不能自动证明当前商业主体已经取得原项目商业授权。完成权利链与自有 CLA 审查前，不合并新的外部代码贡献；详见 [CONTRIBUTING.md](./CONTRIBUTING.md)。

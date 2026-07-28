@@ -27,6 +27,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      OXNOVEL_PUBLIC_SITE_URL: ${{ vars.OXNOVEL_PUBLIC_SITE_URL }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -48,8 +50,11 @@ jobs:
       - name: Check docs manifest
         run: pnpm check:docs-manifest
 
+      - name: Audit commercial egress
+        run: pnpm audit:commercial-egress
+
       - name: Build project site
-        run: pnpm --filter @0xnovelagentl/site build
+        run: pnpm --filter @0xnovelagent/site build
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6

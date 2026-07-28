@@ -7,7 +7,16 @@ const siteRoot = path.resolve(__dirname, "..");
 const distRoot = path.join(siteRoot, "dist");
 const templatePath = path.join(distRoot, "index.html");
 const manifestPath = path.join(distRoot, ".vite", "manifest.json");
-const siteBase = "/AI-Novel-Writing-Assistant/";
+
+function resolveSiteBasePath() {
+  const configuredUrl = process.env.OXNOVEL_PUBLIC_SITE_URL?.trim();
+  if (!configuredUrl) {
+    return "/";
+  }
+  return new URL(configuredUrl).pathname.replace(/\/?$/, "/");
+}
+
+const siteBase = resolveSiteBasePath();
 
 function normalizeManifestCandidate(candidate) {
   return candidate.replace(/\\/g, "/").replace(/^(\.\.\/)+/, "");

@@ -6,10 +6,10 @@
     <title>正在打开文档...</title>
     <script>
       (function () {
-        var base = "/AI-Novel-Writing-Assistant";
+        var base = "";
         var location = window.location;
         var path = location.pathname;
-        if (path.indexOf(base) === 0) {
+        if (base && path.indexOf(base) === 0) {
           path = path.slice(base.length) || "/";
         }
         var target = path + location.search + location.hash;

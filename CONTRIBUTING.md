@@ -2,12 +2,24 @@
 
 Thanks for helping improve 0xNovelAgent.
 
+## Current Contribution Status
+
+External code contributions are temporarily closed while the current
+maintainer completes the commercial authorization chain and establishes a
+CLA that names the correct contracting entity.
+
+Issues, reproducible bug reports, and design discussions are welcome. Do not
+submit code, prompts, tests, documentation, or assets for merge until this
+notice is removed.
+
 ## Contribution License
 
-By intentionally submitting code, prompts, tests, documentation, assets, or
-other material to this repository for inclusion in the project, you confirm
-that you have read and agree to [CLA.md](./CLA.md), including the following
-core terms:
+The inherited [CLA.md](./CLA.md) is retained for provenance and legal review.
+It must not be treated as proof that the current commercial entity has the
+right to relicense the original project or new third-party contributions.
+
+If external contributions reopen, the replacement contribution process must
+confirm at least the following:
 
 - you have the legal right to submit the contribution;
 - you agree that the contribution may be distributed as part of this project

@@ -3,7 +3,14 @@ import { useEffect } from "react";
 const DEFAULT_TITLE = "0xNovelAgent · 从一句灵感到一整本小说";
 const DEFAULT_DESCRIPTION =
   "0xNovelAgent是面向长篇小说的 AI Native 开源生产系统：自动导演、世界观、角色、拆章、章节执行和质量修复串成一条可暂停可恢复的长篇生产链，帮助新手把想法推进到完整成书。";
-const CANONICAL_BASE = "https://explosivecoderflome.github.io/AI-Novel-Writing-Assistant/";
+const CANONICAL_BASE = (__OXNOVEL_PUBLIC_SITE_URL__ || import.meta.env.BASE_URL).replace(/\/?$/, "/");
+
+function resolveCanonical(pathname?: string): string {
+  if (!pathname) {
+    return CANONICAL_BASE;
+  }
+  return `${CANONICAL_BASE}${pathname.replace(/^\/+/, "")}`;
+}
 
 function ensureMeta(selector: string, attribute: "name" | "property", key: string) {
   let element = document.head.querySelector<HTMLMetaElement>(selector);
@@ -46,9 +53,7 @@ export type ResolvedPageMeta = {
 export function resolvePageMeta(meta: PageMeta | null | undefined): ResolvedPageMeta {
   const title = meta?.title ? `${meta.title} · 0xNovelAgent` : DEFAULT_TITLE;
   const description = meta?.description ?? DEFAULT_DESCRIPTION;
-  const canonical = meta?.canonicalPath
-    ? `${CANONICAL_BASE}${meta.canonicalPath.replace(/^\//, "")}`
-    : CANONICAL_BASE;
+  const canonical = resolveCanonical(meta?.canonicalPath);
 
   return { title, description, canonical };
 }
