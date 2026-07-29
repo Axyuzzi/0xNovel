@@ -59,7 +59,7 @@ function Field(props: {
 }
 
 export default function ConsumerAuthPage() {
-  const { login } = useConsumerSession();
+  const { login, register } = useConsumerSession();
   const online = useOnlineStatus();
   const [mode, setMode] = useState<AuthMode>("login");
   const [form, setForm] = useState<AuthFormState>(INITIAL_FORM);
@@ -89,9 +89,10 @@ export default function ConsumerAuthPage() {
           password: form.password,
         }, keepSignedIn);
       } else {
-        // 注册（新账号创建）暂时关闭：中转站的注册/账号创建链路尚未就绪。
-        // 先提示用户暂不可用，等链路联调通过后再开放。
-        setError("创作服务暂不可用，请稍后重试。");
+        await register({
+          username: form.username,
+          password: form.password,
+        }, keepSignedIn);
       }
     } catch (submitError) {
       setError(
@@ -99,7 +100,7 @@ export default function ConsumerAuthPage() {
           ? submitError.message
           : mode === "login"
             ? "登录失败，请检查账号和密码。"
-            : "创作服务暂不可用，请稍后重试。",
+            : "注册失败，请检查填写内容。",
       );
     } finally {
       setSubmitting(false);
