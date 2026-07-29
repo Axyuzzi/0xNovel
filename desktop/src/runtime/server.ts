@@ -285,7 +285,6 @@ function startPackagedManagedServer(
       OXNOVEL_RELAY_BASE_URL: releasePolicy.relayBaseUrl ?? "",
       OXNOVEL_RELAY_ACCOUNT_BASE_URL: releasePolicy.relayAccountBaseUrl ?? "",
       OXNOVEL_RELAY_ALLOWED_ORIGINS: releasePolicy.allowedRelayOrigins.join(","),
-      OXNOVEL_RELAY_REGISTER_AUTH_CODE: releasePolicy.registerAuthCode ?? "",
     },
     stdio: "pipe",
     serviceName: "AI Novel Local Server",

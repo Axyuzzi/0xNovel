@@ -9,7 +9,6 @@ export interface PackagedConsumerReleasePolicy {
   relayBaseUrl: string | null;
   relayAccountBaseUrl: string | null;
   allowedRelayOrigins: string[];
-  registerAuthCode: string | null;
   updateUrl: string | null;
 }
 
@@ -80,9 +79,6 @@ export function resolvePackagedConsumerReleasePolicy(): PackagedConsumerReleaseP
     relayBaseUrl,
     relayAccountBaseUrl,
     allowedRelayOrigins,
-    registerAuthCode: typeof parsed.registerAuthCode === "string" && parsed.registerAuthCode.trim()
-      ? parsed.registerAuthCode.trim()
-      : null,
     updateUrl,
   };
 }

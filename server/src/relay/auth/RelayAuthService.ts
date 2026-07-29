@@ -9,7 +9,7 @@ import {
   RelayHttpError,
   readRelayEnvelopeData,
 } from "../client/RelayHttpClient";
-import { resolveRelayEndpointPaths, resolveRelayRegisterAuthCode } from "../config/relayConfig";
+import { resolveRelayEndpointPaths } from "../config/relayConfig";
 import { relayUsageService, RelayUsageService } from "../usage/RelayUsageService";
 import {
   relayCredentialStore,
@@ -20,6 +20,17 @@ function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object"
     ? value as Record<string, unknown>
     : null;
+}
+
+function readNumber(record: Record<string, unknown> | null, keys: string[]): number | null {
+  if (!record) return null;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return null;
 }
 
 function readString(record: Record<string, unknown> | null, keys: string[]): string {
@@ -33,19 +44,6 @@ function readString(record: Record<string, unknown> | null, keys: string[]): str
   return "";
 }
 
-function extractTokenFromAuthResponse(body: unknown): string {
-  const envelope = readRecord(body);
-  const data = envelope?.data;
-  if (typeof data === "string") {
-    return data.trim();
-  }
-  const dataRecord = readRecord(data);
-  const nestedUser = readRecord(dataRecord?.user);
-  return readString(dataRecord, ["token", "apiKey", "api_key", "key", "accessToken", "access_token"])
-    || readString(envelope, ["token", "apiKey", "api_key", "key", "accessToken", "access_token"])
-    || readString(nestedUser, ["token", "apiKey", "api_key"]);
-}
-
 function extractSessionCookie(setCookie: string | null): string {
   if (!setCookie) return "";
   return setCookie
@@ -55,32 +53,24 @@ function extractSessionCookie(setCookie: string | null): string {
     .join("; ");
 }
 
-function assertSkToken(token: string): string {
-  const normalized = token.trim();
+function assertUsableKey(key: string): string {
+  const normalized = key.trim();
   if (!normalized) {
     throw new RelayHttpError(
-      "创作服务没有返回登录凭证，请联系服务支持。",
-      502,
-    );
-  }
-  if (!normalized.startsWith("sk-")) {
-    throw new RelayHttpError(
-      "创作服务返回的登录凭证格式不正确，请联系服务支持。",
+      "创作服务没有返回可用的登录凭证，请联系服务支持。",
       502,
     );
   }
   return normalized;
 }
 
-function createUserFromBalance(input: {
-  userId: string;
-  username: string;
-}): RelayUserSummary {
-  const username = input.username.trim();
+function buildUserSummary(loginData: Record<string, unknown>): RelayUserSummary {
+  const username = readString(loginData, ["username", "display_name", "displayName"]) || "创作者";
+  const displayName = readString(loginData, ["display_name", "displayName"]) || username;
   return {
-    id: input.userId,
+    id: String(loginData.id ?? "unknown"),
     username,
-    displayName: username,
+    displayName,
   };
 }
 
@@ -90,32 +80,52 @@ export class RelayAuthService {
     private readonly usageService: RelayUsageService = relayUsageService,
   ) {}
 
-  register(input: RelayRegisterRequest): Promise<RelaySession> {
-    const authCode = resolveRelayRegisterAuthCode();
-    return this.authenticate(
-      resolveRelayEndpointPaths().register,
-      {
+  async register(input: RelayRegisterRequest): Promise<RelaySession> {
+    // 中转站（new-api 风格）的注册不直接返回可用 key。完整流程：
+    // 注册 → 登录（拿 session cookie + userId）→ 创建 token → 取 token 明文 key。
+    // 拿到明文 key 后用余额接口验证归属，再建立本地会话。
+    const registerResponse = await this.client.request({
+      path: resolveRelayEndpointPaths().register,
+      method: "POST",
+      body: {
         username: input.username,
         password: input.password,
         ...(input.email ? { email: input.email } : {}),
         ...(input.verificationCode ? { verification_code: input.verificationCode } : {}),
       },
-      authCode ? { Authorization: `Bearer ${authCode}` } : undefined,
-    );
+    });
+    readRelayEnvelopeData(registerResponse.body);
+
+    // 注册成功后立即登录，建立 session 并换取可用 key。
+    return this.login({
+      username: input.username,
+      password: input.password,
+    });
   }
 
-  login(input: RelayLoginRequest): Promise<RelaySession> {
-    return this.authenticate(resolveRelayEndpointPaths().login, input);
+  async login(input: RelayLoginRequest): Promise<RelaySession> {
+    const loginResponse = await this.client.request({
+      path: resolveRelayEndpointPaths().login,
+      method: "POST",
+      body: input,
+    });
+    const loginData = readRelayEnvelopeData(loginResponse.body);
+    const loginDataRecord = readRecord(loginData) ?? {};
+    const user = buildUserSummary(loginDataRecord);
+    const cookie = extractSessionCookie(loginResponse.setCookie);
+
+    // 用 session cookie 创建一个 API token 并取回明文 key。
+    const apiKey = await this.provisionApiKey(user.id, cookie);
+    return this.restore({ token: assertUsableKey(apiKey), user });
   }
 
   async restore(snapshot: RelayCredentialSnapshot): Promise<RelaySession> {
-    const token = assertSkToken(snapshot.token);
+    const token = assertUsableKey(snapshot.token);
     const balance = await this.usageService.getBalance(token);
-    const user = createUserFromBalance(balance);
-    relayCredentialStore.setAuthenticatedSession({ token, user });
+    relayCredentialStore.setAuthenticatedSession({ token, user: snapshot.user });
     return {
       status: "authenticated",
-      user,
+      user: snapshot.user,
       balance,
     };
   }
@@ -133,40 +143,77 @@ export class RelayAuthService {
     return { status: "anonymous" };
   }
 
-  private async authenticate(
-    path: string,
-    requestBody: unknown,
-    extraHeaders?: Record<string, string>,
-  ): Promise<RelaySession> {
-    const response = await this.client.request({
-      path,
-      method: "POST",
-      body: requestBody,
-      extraHeaders,
-    });
-    readRelayEnvelopeData(response.body);
+  /**
+   * 用登录后的 session cookie 创建一个 API token，并取回它的明文 key。
+   * 中转站的 token 列表只返回掩码 key（如 xOyg****ns8L），
+   * 需要单独调 POST /api/token/{id}/key 才能拿到明文。
+   * 如果用户已有 token，复用第一个；否则新建一个。
+   */
+  private async provisionApiKey(userId: string, cookie: string): Promise<string> {
+    if (!cookie) {
+      throw new RelayHttpError("创作服务登录没有返回有效会话，请重试。", 502);
+    }
+    const sessionHeaders: Record<string, string> = {
+      "New-Api-User": userId,
+    };
 
-    let token = extractTokenFromAuthResponse(response.body);
-    if (!token) {
-      const cookie = extractSessionCookie(response.setCookie);
-      if (cookie) {
-        const tokenResponse = await this.client.request({
-          path: resolveRelayEndpointPaths().sessionToken,
-          cookie,
-        });
-        readRelayEnvelopeData(tokenResponse.body);
-        token = extractTokenFromAuthResponse(tokenResponse.body);
-      }
+    // 查现有 token，复用第一个
+    const listResponse = await this.client.request({
+      path: resolveRelayEndpointPaths().apiTokenList,
+      method: "GET",
+      cookie,
+      extraHeaders: sessionHeaders,
+    });
+    const listData = readRecord(readRelayEnvelopeData(listResponse.body));
+    const items = Array.isArray(listData?.items) ? listData.items : [];
+    let tokenId: string | null = null;
+    if (items.length > 0) {
+      const first = readRecord(items[0]);
+      tokenId = first ? String(first.id) : null;
     }
 
-    return this.restore({
-      token: assertSkToken(token),
-      user: {
-        id: "pending",
-        username: "pending",
-        displayName: "pending",
-      },
+    // 没有就创建一个
+    if (!tokenId) {
+      const createResponse = await this.client.request({
+        path: resolveRelayEndpointPaths().apiTokenCreate,
+        method: "POST",
+        body: { name: "0xNovelAgent" },
+        cookie,
+        extraHeaders: sessionHeaders,
+      });
+      readRelayEnvelopeData(createResponse.body);
+      // 创建后重新查列表拿 id
+      const refreshResponse = await this.client.request({
+        path: resolveRelayEndpointPaths().apiTokenList,
+        method: "GET",
+        cookie,
+        extraHeaders: sessionHeaders,
+      });
+      const refreshData = readRecord(readRelayEnvelopeData(refreshResponse.body));
+      const refreshItems = Array.isArray(refreshData?.items) ? refreshData.items : [];
+      const first = refreshItems.length > 0 ? readRecord(refreshItems[0]) : null;
+      tokenId = first ? String(first.id) : null;
+    }
+
+    if (!tokenId) {
+      throw new RelayHttpError("创作服务没有创建可用的访问凭证，请重试。", 502);
+    }
+
+    // 取明文 key
+    const keyResponse = await this.client.request({
+      path: resolveRelayEndpointPaths().apiTokenKey(tokenId),
+      method: "POST",
+      body: {},
+      cookie,
+      extraHeaders: sessionHeaders,
     });
+    const keyData = readRelayEnvelopeData(keyResponse.body);
+    const keyRecord = readRecord(keyData);
+    const apiKey = readString(keyRecord, ["key", "token", "apiKey", "api_key"]);
+    if (!apiKey) {
+      throw new RelayHttpError("创作服务没有返回可用的登录凭证，请联系服务支持。", 502);
+    }
+    return apiKey;
   }
 }
 

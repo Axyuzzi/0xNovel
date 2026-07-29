@@ -49,15 +49,6 @@ export function resolveRelayModelAlias(): string {
   return process.env.OXNOVEL_RELAY_MODEL?.trim() || "auto";
 }
 
-/**
- * 内部注册鉴权码：调用中转内部注册接口时作为 Authorization: Bearer 头携带，
- * 使注册能返回可用的明文 sk- key（中转对公开注册不返回明文 key）。
- * 不配置时为空，注册仍可调用但拿不到明文 key。
- */
-export function resolveRelayRegisterAuthCode(): string {
-  return process.env.OXNOVEL_RELAY_REGISTER_AUTH_CODE?.trim() ?? "";
-}
-
 function resolveRelayPath(environmentName: string, fallback: string): string {
   const configured = process.env[environmentName]?.trim() || fallback;
   if (!configured.startsWith("/") || configured.startsWith("//")) {
@@ -70,6 +61,9 @@ export interface RelayEndpointPaths {
   register: string;
   login: string;
   sessionToken: string;
+  apiTokenList: string;
+  apiTokenCreate: string;
+  apiTokenKey: (tokenId: string) => string;
   balance: string;
   usageLogs: string;
   paymentInfo: string;
@@ -82,10 +76,14 @@ export function resolveRelayEndpointPaths(): RelayEndpointPaths {
     "OXNOVEL_RELAY_PAYMENT_ORDER_PATH",
     "/api/usage/payment/orders",
   );
+  const apiTokenPrefix = resolveRelayPath("OXNOVEL_RELAY_API_TOKEN_PATH", "/api/token");
   return {
     register: resolveRelayPath("OXNOVEL_RELAY_REGISTER_PATH", "/api/user/register"),
     login: resolveRelayPath("OXNOVEL_RELAY_LOGIN_PATH", "/api/user/login"),
     sessionToken: resolveRelayPath("OXNOVEL_RELAY_SESSION_TOKEN_PATH", "/api/user/token"),
+    apiTokenList: apiTokenPrefix,
+    apiTokenCreate: apiTokenPrefix,
+    apiTokenKey: (tokenId: string) => `${apiTokenPrefix}/${encodeURIComponent(tokenId)}/key`,
     balance: resolveRelayPath("OXNOVEL_RELAY_BALANCE_PATH", "/api/usage/balance"),
     usageLogs: resolveRelayPath("OXNOVEL_RELAY_USAGE_LOGS_PATH", "/api/usage/logs"),
     paymentInfo: resolveRelayPath("OXNOVEL_RELAY_PAYMENT_INFO_PATH", "/api/usage/payment/info"),

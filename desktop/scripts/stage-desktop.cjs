@@ -117,8 +117,6 @@ function writeConsumerReleasePolicy() {
     relayBaseUrl,
     relayAccountBaseUrl,
     allowedRelayOrigins,
-    // 内部注册鉴权码：使中转注册接口返回明文 sk- key。仅 beta 验收用，公开发布需重新评估是否固化。
-    registerAuthCode: (process.env.OXNOVEL_RELAY_REGISTER_AUTH_CODE || "").trim() || null,
     updateUrl,
   };
   fs.writeFileSync(consumerReleasePolicyPath, `${JSON.stringify(policy, null, 2)}\n`, "utf8");
