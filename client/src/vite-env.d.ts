@@ -12,7 +12,9 @@ interface ImportMetaEnv {
 interface Window {
   __AI_NOVEL_RUNTIME__?: {
     mode?: "web" | "desktop";
+    productMode?: "legacy" | "consumer";
     apiBaseUrl?: string;
+    apiSessionToken?: string;
     apiTimeoutMs?: number | string;
     isPackaged?: boolean;
     appVersion?: string;
@@ -29,13 +31,6 @@ interface Window {
       logFile: string;
       updatedAt: string;
       canRetry: boolean;
-    }>;
-    getDataImportSnapshot?: () => Promise<{
-      currentDatabasePath: string;
-      currentDatabaseLikelyFresh: boolean;
-      suggestedSourcePath: string | null;
-      suggestedSourceLabel: string | null;
-      backupDirectory: string;
     }>;
     subscribeBootstrapState?: (
       listener: (snapshot: {
@@ -88,10 +83,37 @@ interface Window {
     openLogsDirectory?: () => Promise<unknown>;
     copyLogPath?: () => Promise<string | undefined>;
     restartApp?: () => Promise<unknown>;
-    importLegacyDatabase?: (options?: { preferSuggested?: boolean }) => Promise<{
-      scheduled: boolean;
-      cancelled: boolean;
-      sourcePath?: string;
-    } | null>;
+    canPersistSession?: () => Promise<boolean>;
+    persistAuthenticatedSession?: (keepSignedIn: boolean) => Promise<{
+      persisted: boolean;
+      restartRequired: boolean;
+    }>;
+    clearAuthenticatedSession?: () => Promise<{ cleared: boolean }>;
+    switchAccount?: () => Promise<{ switched: boolean }>;
+    createProfileBackup?: () => Promise<{
+      canceled: boolean;
+      path?: string;
+      createdAt?: string;
+      size?: number;
+    }>;
+    exportProfileBackup?: () => Promise<{
+      canceled: boolean;
+      path?: string;
+      createdAt?: string;
+      size?: number;
+    }>;
+    openProfileBackupsDirectory?: () => Promise<string>;
+    restoreProfileBackup?: () => Promise<{
+      canceled: boolean;
+      safetyBackupPath?: string;
+      recoveryDir?: string;
+    }>;
+    deleteLocalProfile?: (confirmation: string) => Promise<{
+      canceled: boolean;
+      deleted: boolean;
+    }>;
+    subscribeBeforeContentClose?: (
+      listener: () => void | Promise<void>,
+    ) => (() => void) | void;
   };
 }

@@ -39,20 +39,6 @@ export interface DesktopUpdaterSnapshot {
   lastCheckedAt: string | null;
 }
 
-export interface DesktopDataImportSnapshot {
-  currentDatabasePath: string;
-  currentDatabaseLikelyFresh: boolean;
-  suggestedSourcePath: string | null;
-  suggestedSourceLabel: string | null;
-  backupDirectory: string;
-}
-
-export interface DesktopDataImportResult {
-  scheduled: boolean;
-  cancelled: boolean;
-  sourcePath?: string;
-}
-
 const DEFAULT_BOOTSTRAP_SNAPSHOT: DesktopBootstrapSnapshot = {
   state: "launching",
   stage: "launching",
@@ -116,12 +102,80 @@ export async function restartDesktopApp(): Promise<void> {
   await getDesktopBridge()?.restartApp?.();
 }
 
-export async function getDesktopDataImportSnapshot(): Promise<DesktopDataImportSnapshot | null> {
-  return getDesktopBridge()?.getDataImportSnapshot?.() ?? null;
+export async function canPersistDesktopSession(): Promise<boolean> {
+  return (await getDesktopBridge()?.canPersistSession?.()) ?? false;
 }
 
-export async function importDesktopLegacyDatabase(options?: { preferSuggested?: boolean }): Promise<DesktopDataImportResult | null> {
-  return getDesktopBridge()?.importLegacyDatabase?.(options) ?? null;
+export async function persistDesktopAuthenticatedSession(keepSignedIn: boolean): Promise<boolean> {
+  const result = await getDesktopBridge()?.persistAuthenticatedSession?.(keepSignedIn);
+  return result?.persisted === true;
+}
+
+export async function clearDesktopAuthenticatedSession(): Promise<void> {
+  await getDesktopBridge()?.clearAuthenticatedSession?.();
+}
+
+// 换账号：桌面端会排空在途创作操作、停掉旧资料域服务、清凭证并重启 app。
+// 整个 app 会被重启到登录页，所以调用方不需要在之后更新 UI 状态。
+export async function switchDesktopAccount(): Promise<void> {
+  await getDesktopBridge()?.switchAccount?.();
+}
+
+export interface DesktopProfileBackupResult {
+  canceled: boolean;
+  path?: string;
+  createdAt?: string;
+  size?: number;
+}
+
+export async function createDesktopProfileBackup(): Promise<DesktopProfileBackupResult> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.createProfileBackup) {
+    throw new Error("本地备份仅在桌面版中提供。");
+  }
+  return bridge.createProfileBackup();
+}
+
+export async function exportDesktopProfileBackup(): Promise<DesktopProfileBackupResult> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.exportProfileBackup) {
+    throw new Error("本地备份仅在桌面版中提供。");
+  }
+  return bridge.exportProfileBackup();
+}
+
+export async function openDesktopProfileBackupsDirectory(): Promise<void> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.openProfileBackupsDirectory) {
+    throw new Error("本地备份仅在桌面版中提供。");
+  }
+  await bridge.openProfileBackupsDirectory();
+}
+
+export async function restoreDesktopProfileBackup(): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.restoreProfileBackup) {
+    throw new Error("本地备份仅在桌面版中提供。");
+  }
+  const result = await bridge.restoreProfileBackup();
+  return result.canceled !== true;
+}
+
+export async function deleteDesktopLocalProfile(
+  confirmation: string,
+): Promise<{ canceled: boolean; deleted: boolean }> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.deleteLocalProfile) {
+    throw new Error("删除本机作品仅在桌面版中提供。");
+  }
+  return bridge.deleteLocalProfile(confirmation);
+}
+
+export function subscribeDesktopBeforeContentClose(
+  listener: () => void | Promise<void>,
+): () => void {
+  const unsubscribe = getDesktopBridge()?.subscribeBeforeContentClose?.(listener);
+  return typeof unsubscribe === "function" ? unsubscribe : () => undefined;
 }
 
 export function useDesktopBootstrap(): DesktopBootstrapSnapshot {
