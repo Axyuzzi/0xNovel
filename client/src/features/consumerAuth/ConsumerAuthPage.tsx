@@ -17,16 +17,12 @@ type AuthMode = "login" | "register";
 
 interface AuthFormState {
   username: string;
-  email: string;
-  verificationCode: string;
   password: string;
   confirmPassword: string;
 }
 
 const INITIAL_FORM: AuthFormState = {
   username: "",
-  email: "",
-  verificationCode: "",
   password: "",
   confirmPassword: "",
 };
@@ -63,7 +59,7 @@ function Field(props: {
 }
 
 export default function ConsumerAuthPage() {
-  const { login, register } = useConsumerSession();
+  const { login } = useConsumerSession();
   const online = useOnlineStatus();
   const [mode, setMode] = useState<AuthMode>("login");
   const [form, setForm] = useState<AuthFormState>(INITIAL_FORM);
@@ -93,14 +89,9 @@ export default function ConsumerAuthPage() {
           password: form.password,
         }, keepSignedIn);
       } else {
-        await register({
-          username: form.username,
-          password: form.password,
-          ...(form.email.trim() ? { email: form.email.trim() } : {}),
-          ...(form.verificationCode.trim()
-            ? { verificationCode: form.verificationCode.trim() }
-            : {}),
-        }, keepSignedIn);
+        // 注册（新账号创建）暂时关闭：中转站的注册/账号创建链路尚未就绪。
+        // 先提示用户暂不可用，等链路联调通过后再开放。
+        setError("创作服务暂不可用，请稍后重试。");
       }
     } catch (submitError) {
       setError(
@@ -108,7 +99,7 @@ export default function ConsumerAuthPage() {
           ? submitError.message
           : mode === "login"
             ? "登录失败，请检查账号和密码。"
-            : "注册失败，请检查填写内容。",
+            : "创作服务暂不可用，请稍后重试。",
       );
     } finally {
       setSubmitting(false);
@@ -198,28 +189,6 @@ export default function ConsumerAuthPage() {
                 placeholder={mode === "login" ? "输入账号或邮箱" : "设置一个好记的账号"}
                 onChange={(value) => update("username", value)}
               />
-
-              {mode === "register" ? (
-                <>
-                  <Field
-                    id="email"
-                    label="邮箱（选填）"
-                    value={form.email}
-                    type="email"
-                    autoComplete="email"
-                    placeholder="用于找回账号"
-                    onChange={(value) => update("email", value)}
-                  />
-                  <Field
-                    id="verificationCode"
-                    label="邮箱验证码（如已收到）"
-                    value={form.verificationCode}
-                    autoComplete="one-time-code"
-                    placeholder="输入验证码"
-                    onChange={(value) => update("verificationCode", value)}
-                  />
-                </>
-              ) : null}
 
               <Field
                 id="password"
