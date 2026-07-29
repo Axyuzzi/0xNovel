@@ -9,6 +9,11 @@ const appDir = path.join(buildDir, "app");
 const resourcesDir = path.join(buildDir, "resources");
 const appUpdateConfigPath = path.join(resourcesDir, "app-update.yml");
 const consumerReleasePolicyPath = path.join(resourcesDir, "consumer-release.json");
+const consumerReleaseDefaultsPath = path.join(
+  desktopDir,
+  "config",
+  "consumer-release.defaults.json",
+);
 const clientSourceDir = path.join(repoRoot, "client", "dist");
 const clientTargetDir = path.join(resourcesDir, "client", "dist");
 const serverEntry = path.join(appDir, "node_modules", "@0xnovelagent", "server", "dist", "app.js");
@@ -22,6 +27,22 @@ const prismaClientEntrypointFiles = [
   { fileName: "index.js", generatedEntry: "./generated-client/index" },
   { fileName: "edge.js", generatedEntry: "./generated-client/edge" },
 ];
+
+function readConsumerReleaseDefaults() {
+  const parsed = JSON.parse(fs.readFileSync(consumerReleaseDefaultsPath, "utf8"));
+  return {
+    relayBaseUrl: normalizeOwnedHttpsUrl(
+      parsed.relayBaseUrl,
+      "consumer-release.defaults.json relayBaseUrl",
+      true,
+    ),
+    relayAccountBaseUrl: normalizeOwnedHttpsUrl(
+      parsed.relayAccountBaseUrl,
+      "consumer-release.defaults.json relayAccountBaseUrl",
+      true,
+    ),
+  };
+}
 
 function runPnpm(args, cwd = repoRoot) {
   const command = `pnpm ${args.map((arg) => `"${arg}"`).join(" ")}`;
@@ -90,15 +111,18 @@ function normalizeOwnedHttpsUrl(value, environmentName, required) {
 function writeConsumerReleasePolicy() {
   const releaseChannel = (process.env.AI_NOVEL_RELEASE_CHANNEL || "beta").trim().toLowerCase();
   const publicRelease = releaseChannel !== "beta";
+  const defaults = readConsumerReleaseDefaults();
   const relayBaseUrl = normalizeOwnedHttpsUrl(
-    process.env.OXNOVEL_RELAY_BASE_URL,
+    process.env.OXNOVEL_RELAY_BASE_URL || defaults.relayBaseUrl,
     "OXNOVEL_RELAY_BASE_URL",
-    publicRelease,
+    true,
   );
   const relayAccountBaseUrl = normalizeOwnedHttpsUrl(
-    process.env.OXNOVEL_RELAY_ACCOUNT_BASE_URL || process.env.OXNOVEL_RELAY_BASE_URL,
+    process.env.OXNOVEL_RELAY_ACCOUNT_BASE_URL
+      || process.env.OXNOVEL_RELAY_BASE_URL
+      || defaults.relayAccountBaseUrl,
     "OXNOVEL_RELAY_ACCOUNT_BASE_URL",
-    publicRelease,
+    true,
   );
   const updateUrl = normalizeOwnedHttpsUrl(
     resolveDesktopUpdateUrl(),

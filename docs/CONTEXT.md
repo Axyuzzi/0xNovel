@@ -24,6 +24,7 @@
 - 桌面端使用每台安装随机盐对中转 `userId` 做 HMAC 派生，得到匿名 `profileId`；正式本机服务从进程启动起只连接 `consumer-v1/profiles/<profileId>/data/dev.db`，换账号通过加密凭证切换资料域并重新启动本机服务。
 - 桌面 renderer 只持有每次启动随机生成的本机 API 会话凭证；用户 `sk-` Token 只存在于 Electron `safeStorage` 密文和本机服务内存。主进程与本机服务使用另一枚不进入 renderer 的临时 Broker 凭证导出和恢复 Token。
 - 中转账户 API 根地址使用 `OXNOVEL_RELAY_ACCOUNT_BASE_URL`，OpenAI 兼容模型根地址使用 `OXNOVEL_RELAY_BASE_URL`；两者必须分离配置，业务模块不得直接拼接中转地址。
+- 桌面发布默认中转配置集中保存在 `desktop/config/consumer-release.defaults.json`，当前账号根地址为 `https://api.0xkey.cn`、模型根地址为 `https://api.0xkey.cn/v1`；发布环境变量可以覆盖，但任何 Beta/正式安装包都不得再生成空中转策略。
 - 中转注册固定发送 `username`、`password`、可选 `email` 和可选 `verification_code`，登录固定发送 `username`、`password`；两者都统一为带 `0xn_` 前缀的中转用户名。
 - 注册接口不被假定直接返回 API Key。同步认证固定执行“注册（仅注册模式）→ 登录取得 Cookie/用户 ID → 查找或创建名称严格为 `0xNovelAgent` 的有效 Key → 取回明文 → 统一规范为 `sk-...` → 用余额接口校验归属”。
 - 同一账号优先复用 ID 最大、启用且未过期的 `0xNovelAgent` Key；其他客户端 Key、禁用 Key 和过期 Key不复用。中转返回裸 key 时只在服务端边界补 `sk-`，桌面 Broker、`safeStorage` 和后续 Bearer 请求只接受规范 `sk-`。
