@@ -670,6 +670,23 @@ export class ConsumerChapterProductionService {
     };
   }
 
+  /**
+   * 汇总某一章所有创作操作（任务+正文+续写）的累计消费，转成 0x积分。
+   * 用于在工作台展示“本章一共花了多少”，而不是只看最近一次操作。
+   * 只统计已经计费完成（actualCreditsMilli 非空）的操作；没有任何已计费操作时返回 null。
+   */
+  private async getChapterTotalCredits(chapterId: string): Promise<number | null> {
+    const rows = await this.db.consumerCreationOperation.findMany({
+      where: { chapterId, actualCreditsMilli: { not: null } },
+      select: { actualCreditsMilli: true },
+    });
+    if (rows.length === 0) {
+      return null;
+    }
+    const sumMilli = rows.reduce((total, row) => total + (row.actualCreditsMilli ?? 0), 0);
+    return sumMilli / 1_000;
+  }
+
   private async serializeOperation(
     operation: ConsumerCreationOperation,
   ): Promise<ConsumerChapterProductionSnapshot> {
@@ -694,6 +711,7 @@ export class ConsumerChapterProductionService {
       actualCredits: operation.actualCreditsMilli === null
         ? null
         : operation.actualCreditsMilli / 1_000,
+      chapterTotalCredits: await this.getChapterTotalCredits(operation.chapterId),
       errorMessage: operation.errorMessage,
       startedAt: operation.startedAt?.toISOString() ?? null,
       finishedAt: operation.finishedAt?.toISOString() ?? null,
