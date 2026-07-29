@@ -4,6 +4,7 @@ import type {
   RelaySession,
   RelayUserSummary,
 } from "@0xnovelagent/shared/types/relay";
+import { normalizeRelayApiKey } from "@0xnovelagent/shared/types/relay";
 import {
   RelayHttpClient,
   RelayHttpError,
@@ -54,21 +55,33 @@ function extractSessionCookie(setCookie: string | null): string {
 }
 
 function assertUsableKey(key: string): string {
-  const normalized = key.trim();
-  if (!normalized) {
+  try {
+    return normalizeRelayApiKey(key);
+  } catch (error) {
     throw new RelayHttpError(
       "创作服务没有返回可用的登录凭证，请联系服务支持。",
       502,
+      { cause: error },
     );
   }
-  return normalized;
 }
 
-function buildUserSummary(loginData: Record<string, unknown>): RelayUserSummary {
-  const username = readString(loginData, ["username", "display_name", "displayName"]) || "创作者";
+function buildUserSummary(
+  loginData: Record<string, unknown>,
+  fallbackUsername: string,
+): RelayUserSummary {
+  const rawId = loginData.id;
+  const id = typeof rawId === "number" || typeof rawId === "string"
+    ? String(rawId).trim()
+    : "";
+  if (!id) {
+    throw new RelayHttpError("创作服务登录没有返回有效用户编号，请重试。", 502);
+  }
+  const username = readString(loginData, ["username", "display_name", "displayName"])
+    || fallbackUsername;
   const displayName = readString(loginData, ["display_name", "displayName"]) || username;
   return {
-    id: String(loginData.id ?? "unknown"),
+    id,
     username,
     displayName,
   };
@@ -125,7 +138,7 @@ export class RelayAuthService {
     });
     const loginData = readRelayEnvelopeData(loginResponse.body);
     const loginDataRecord = readRecord(loginData) ?? {};
-    const user = buildUserSummary(loginDataRecord);
+    const user = buildUserSummary(loginDataRecord, toRelayUsername(input.username));
     const cookie = extractSessionCookie(loginResponse.setCookie);
 
     // 用 session cookie 创建一个 API token 并取回明文 key。
@@ -136,10 +149,18 @@ export class RelayAuthService {
   async restore(snapshot: RelayCredentialSnapshot): Promise<RelaySession> {
     const token = assertUsableKey(snapshot.token);
     const balance = await this.usageService.getBalance(token);
-    relayCredentialStore.setAuthenticatedSession({ token, user: snapshot.user });
+    const suppliedUser = snapshot.user;
+    const user: RelayUserSummary = {
+      id: balance.userId,
+      username: balance.username,
+      displayName: suppliedUser?.id === balance.userId && suppliedUser.displayName.trim()
+        ? suppliedUser.displayName.trim()
+        : balance.username,
+    };
+    relayCredentialStore.setAuthenticatedSession({ token, user });
     return {
       status: "authenticated",
-      user: snapshot.user,
+      user,
       balance,
     };
   }
@@ -178,13 +199,8 @@ export class RelayAuthService {
       cookie,
       extraHeaders: sessionHeaders,
     });
-    const listData = readRecord(readRelayEnvelopeData(listResponse.body));
-    const items = Array.isArray(listData?.items) ? listData.items : [];
-    let tokenId: string | null = null;
-    if (items.length > 0) {
-      const first = readRecord(items[0]);
-      tokenId = first ? String(first.id) : null;
-    }
+    const items = this.readTokenItems(readRelayEnvelopeData(listResponse.body));
+    let tokenId = this.selectProductTokenId(items);
 
     // 没有就创建一个
     if (!tokenId) {
@@ -203,10 +219,8 @@ export class RelayAuthService {
         cookie,
         extraHeaders: sessionHeaders,
       });
-      const refreshData = readRecord(readRelayEnvelopeData(refreshResponse.body));
-      const refreshItems = Array.isArray(refreshData?.items) ? refreshData.items : [];
-      const first = refreshItems.length > 0 ? readRecord(refreshItems[0]) : null;
-      tokenId = first ? String(first.id) : null;
+      const refreshItems = this.readTokenItems(readRelayEnvelopeData(refreshResponse.body));
+      tokenId = this.selectProductTokenId(refreshItems);
     }
 
     if (!tokenId) {
@@ -223,11 +237,54 @@ export class RelayAuthService {
     });
     const keyData = readRelayEnvelopeData(keyResponse.body);
     const keyRecord = readRecord(keyData);
-    const apiKey = readString(keyRecord, ["key", "token", "apiKey", "api_key"]);
+    const apiKey = typeof keyData === "string"
+      ? keyData.trim()
+      : readString(keyRecord, ["key", "token", "apiKey", "api_key"]);
     if (!apiKey) {
       throw new RelayHttpError("创作服务没有返回可用的登录凭证，请联系服务支持。", 502);
     }
-    return apiKey;
+    return assertUsableKey(apiKey);
+  }
+
+  private readTokenItems(value: unknown): unknown[] {
+    if (Array.isArray(value)) return value;
+    const record = readRecord(value);
+    if (Array.isArray(record?.items)) return record.items;
+    if (Array.isArray(record?.data)) return record.data;
+    return [];
+  }
+
+  private selectProductTokenId(items: unknown[]): string | null {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const candidates = items
+      .map(readRecord)
+      .filter((item): item is Record<string, unknown> => Boolean(item))
+      .filter((item) => readString(item, ["name"]) === "0xNovelAgent")
+      .filter((item) => {
+        const enabled = item.enabled;
+        if (typeof enabled === "boolean" && !enabled) return false;
+
+        const status = item.status;
+        if (
+          status !== undefined
+          && status !== 1
+          && status !== "1"
+          && status !== "enabled"
+          && status !== "active"
+        ) {
+          return false;
+        }
+
+        const expiresAt = readNumber(item, ["expired_time", "expires_at", "expiresAt"]);
+        return expiresAt === null || expiresAt <= 0 || expiresAt > nowSeconds;
+      })
+      .filter((item) => item.id !== undefined && String(item.id).trim())
+      .sort((left, right) => {
+        const leftId = Number(left.id);
+        const rightId = Number(right.id);
+        return Number.isFinite(leftId) && Number.isFinite(rightId) ? rightId - leftId : 0;
+      });
+    return candidates.length > 0 ? String(candidates[0].id) : null;
   }
 }
 

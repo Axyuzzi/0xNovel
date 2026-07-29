@@ -1,18 +1,18 @@
-import type { RelayUserSummary } from "@0xnovelagent/shared/types/relay";
+import {
+  normalizeRelayApiKey,
+  type RelayUserSummary,
+} from "@0xnovelagent/shared/types/relay";
 
 export interface RelayCredentialSnapshot {
   token: string;
-  user: RelayUserSummary;
+  user?: RelayUserSummary;
 }
 
 class RelayCredentialStore {
-  private snapshot: RelayCredentialSnapshot | null = null;
+  private snapshot: Required<RelayCredentialSnapshot> | null = null;
 
-  setAuthenticatedSession(snapshot: RelayCredentialSnapshot): void {
-    const token = snapshot.token.trim();
-    if (!token) {
-      throw new Error("创作服务没有返回可用的登录凭证。");
-    }
+  setAuthenticatedSession(snapshot: Required<RelayCredentialSnapshot>): void {
+    const token = normalizeRelayApiKey(snapshot.token);
 
     this.snapshot = {
       token,
@@ -36,7 +36,7 @@ class RelayCredentialStore {
     return this.snapshot?.token ?? null;
   }
 
-  getSnapshotForCredentialBroker(): RelayCredentialSnapshot | null {
+  getSnapshotForCredentialBroker(): Required<RelayCredentialSnapshot> | null {
     return this.snapshot
       ? {
           token: this.snapshot.token,

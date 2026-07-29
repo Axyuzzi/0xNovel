@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { ApiResponse } from "@0xnovelagent/shared/types/api";
 import {
   relayCreatePaymentRequestSchema,
+  relayApiKeySchema,
   relayLoginRequestSchema,
   relayRegisterRequestSchema,
   relayUsageLogQuerySchema,
@@ -23,7 +24,10 @@ import { z } from "zod";
 
 const router = Router();
 const brokerRestoreSchema = z.object({
-  token: z.string().trim().min(1).max(512),
+  token: relayApiKeySchema,
+  userId: z.string().trim().min(1).max(128).optional(),
+  username: z.string().trim().min(1).max(128).optional(),
+  displayName: z.string().trim().min(1).max(128).optional(),
 });
 
 function requireRelayToken(): string {
@@ -84,11 +88,18 @@ router.post("/auth/broker/export", credentialBrokerGuard, (_req, res) => {
   if (!snapshot) {
     throw new AppError("当前没有可保存的登录状态。", 401);
   }
-  const response: ApiResponse<{ token: string; userId: string }> = {
+  const response: ApiResponse<{
+    token: string;
+    userId: string;
+    username: string;
+    displayName: string;
+  }> = {
     success: true,
     data: {
       token: snapshot.token,
       userId: snapshot.user.id,
+      username: snapshot.user.username,
+      displayName: snapshot.user.displayName,
     },
   };
   res.status(200).json(response);
@@ -97,14 +108,14 @@ router.post("/auth/broker/export", credentialBrokerGuard, (_req, res) => {
 router.post("/auth/broker/restore", credentialBrokerGuard, async (req, res) => {
   try {
     const input = brokerRestoreSchema.parse(req.body);
-    const data = await relayAuthService.restore({
-      token: input.token,
-      user: {
-        id: "pending",
-        username: "pending",
-        displayName: "pending",
-      },
-    });
+    const storedUser = input.userId && input.username
+      ? {
+          id: input.userId,
+          username: input.username,
+          displayName: input.displayName || input.username,
+        }
+      : undefined;
+    const data = await relayAuthService.restore({ token: input.token, user: storedUser });
     const response: ApiResponse<RelaySession> = { success: true, data };
     res.status(200).json(response);
   } catch (error) {

@@ -5,6 +5,17 @@ const requiredText = (label: string, maxLength: number) => z.string()
   .min(1, `${label}不能为空。`)
   .max(maxLength, `${label}不能超过 ${maxLength} 个字符。`);
 
+export const relayApiKeySchema = z.string()
+  .trim()
+  .min(7, "创作服务登录凭证无效。")
+  .max(512, "创作服务登录凭证过长。")
+  .startsWith("sk-", "创作服务登录凭证格式无效。");
+
+export function normalizeRelayApiKey(value: string): string {
+  const trimmed = value.trim();
+  return relayApiKeySchema.parse(trimmed.startsWith("sk-") ? trimmed : `sk-${trimmed}`);
+}
+
 export const relayRegisterRequestSchema = z.object({
   // 用户名上限预留项目前缀（0xn_，4 字符）的空间，避免加前缀后超过中转的 max 校验。
   username: requiredText("账号", 60),
@@ -108,7 +119,10 @@ export const relayUsageLogQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   type: z.coerce.number().int().min(0).max(2).default(0),
   modelName: z.string().trim().max(128).optional(),
+  tokenName: z.string().trim().max(128).optional(),
+  group: z.string().trim().max(128).optional(),
   requestId: z.string().trim().max(256).optional(),
+  upstreamRequestId: z.string().trim().max(256).optional(),
   startTimestamp: z.coerce.number().int().positive().optional(),
   endTimestamp: z.coerce.number().int().positive().optional(),
 });

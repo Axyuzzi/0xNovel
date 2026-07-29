@@ -184,10 +184,10 @@ export default function ConsumerAuthPage() {
             <form className="mt-7 space-y-5" onSubmit={(event) => void submit(event)}>
               <Field
                 id="username"
-                label={mode === "login" ? "账号或邮箱" : "账号"}
+                label="账号"
                 value={form.username}
                 autoComplete="username"
-                placeholder={mode === "login" ? "输入账号或邮箱" : "设置一个好记的账号"}
+                placeholder={mode === "login" ? "输入账号" : "设置一个好记的账号"}
                 onChange={(value) => update("username", value)}
               />
 

@@ -304,7 +304,7 @@ async function bootstrapDesktopApp(): Promise<void> {
   desktopServerPort = server.port;
   if (persistedCredential) {
     try {
-      await restoreCredentialToServer(getCredentialBrokerOptions(), persistedCredential.token);
+      await restoreCredentialToServer(getCredentialBrokerOptions(), persistedCredential);
       appendBootstrapStage("session-restored", "Saved user session restored.");
     } catch (error) {
       logDesktopError("desktop.session.restore", error);
