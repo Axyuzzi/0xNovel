@@ -74,6 +74,18 @@ function buildUserSummary(loginData: Record<string, unknown>): RelayUserSummary 
   };
 }
 
+/**
+ * 本客户端在中转站的注册用户名前缀。用户在前端只填「张三」，
+ * 发往中转注册/登录时统一带上前缀变成「0xn_张三」，方便中转后台区分来源。
+ * 用户全程感知不到前缀；如果用户自己填的名字已带前缀，不再重复添加。
+ */
+const RELAY_USERNAME_PREFIX = "0xn_";
+
+function toRelayUsername(rawUsername: string): string {
+  const trimmed = rawUsername.trim();
+  return trimmed.startsWith(RELAY_USERNAME_PREFIX) ? trimmed : `${RELAY_USERNAME_PREFIX}${trimmed}`;
+}
+
 export class RelayAuthService {
   constructor(
     private readonly client = new RelayHttpClient(),
@@ -84,11 +96,13 @@ export class RelayAuthService {
     // 中转站（new-api 风格）的注册不直接返回可用 key。完整流程：
     // 注册 → 登录（拿 session cookie + userId）→ 创建 token → 取 token 明文 key。
     // 拿到明文 key 后用余额接口验证归属，再建立本地会话。
+    // 用户名统一带项目前缀，方便中转后台区分来源。
+    const relayUsername = toRelayUsername(input.username);
     const registerResponse = await this.client.request({
       path: resolveRelayEndpointPaths().register,
       method: "POST",
       body: {
-        username: input.username,
+        username: relayUsername,
         password: input.password,
         ...(input.email ? { email: input.email } : {}),
         ...(input.verificationCode ? { verification_code: input.verificationCode } : {}),
@@ -107,7 +121,7 @@ export class RelayAuthService {
     const loginResponse = await this.client.request({
       path: resolveRelayEndpointPaths().login,
       method: "POST",
-      body: input,
+      body: { ...input, username: toRelayUsername(input.username) },
     });
     const loginData = readRelayEnvelopeData(loginResponse.body);
     const loginDataRecord = readRecord(loginData) ?? {};
