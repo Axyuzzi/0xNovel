@@ -46,7 +46,7 @@ export function resolveRelayAccountBaseUrl(): string {
 }
 
 export function resolveRelayModelAlias(): string {
-  return process.env.OXNOVEL_RELAY_MODEL?.trim() || "auto";
+  return process.env.OXNOVEL_RELAY_MODEL?.trim() || "qwen3.6-plus";
 }
 
 function resolveRelayPath(environmentName: string, fallback: string): string {

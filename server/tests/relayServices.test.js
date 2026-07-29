@@ -5,6 +5,15 @@ const { RelayAuthService } = require("../dist/relay/auth/RelayAuthService.js");
 const { relayCredentialStore } = require("../dist/relay/auth/RelayCredentialStore.js");
 const { RelayUsageService } = require("../dist/relay/usage/RelayUsageService.js");
 const { RelayPaymentService } = require("../dist/relay/payment/RelayPaymentService.js");
+const {
+  toConsumerRelayErrorMessage,
+} = require("../dist/relay/errors/consumerRelayError.js");
+const {
+  resolveRelayModelAlias,
+} = require("../dist/relay/config/relayConfig.js");
+const {
+  StructuredOutputError,
+} = require("../dist/llm/structuredOutput.js");
 
 function jsonResponse(body, init = {}) {
   return new Response(JSON.stringify(body), {
@@ -78,13 +87,26 @@ test("registration freezes request fields and completes register-login-key-sessi
             ? [{ id: 7, name: "other-client", status: 1, expired_time: -1 }]
             : [
                 { id: 7, name: "other-client", status: 1, expired_time: -1 },
-                { id: 88, name: "0xNovelAgent", status: 1, expired_time: -1 },
+                {
+                  id: 88,
+                  name: "0xNovelAgent",
+                  status: 1,
+                  expired_time: -1,
+                  unlimited_quota: true,
+                  remain_quota: 0,
+                },
               ],
         },
       });
     }
     if (target.pathname === "/api/token" && init.method === "POST") {
-      assert.deepEqual(body, { name: "0xNovelAgent" });
+      assert.deepEqual(body, {
+        name: "0xNovelAgent",
+        expired_time: -1,
+        remain_quota: 0,
+        unlimited_quota: true,
+        model_limits_enabled: false,
+      });
       return jsonResponse({ success: true, data: { id: 88 } });
     }
     if (target.pathname === "/api/token/88/key") {
@@ -92,7 +114,10 @@ test("registration freezes request fields and completes register-login-key-sessi
     }
     if (target.pathname === "/api/usage/balance") {
       assert.equal(headers.get("authorization"), "Bearer sk-register-token-without-prefix");
-      return jsonResponse(balanceEnvelope());
+      return jsonResponse(balanceEnvelope({
+        tokenUnlimited: true,
+        tokenQuota: 0,
+      }));
     }
     throw new Error(`unexpected request: ${url}`);
   };
@@ -154,6 +179,14 @@ test("login reuses only the newest active product key and restores user identity
             { id: 41, name: "0xNovelAgent", status: 1, expired_time: 1 },
             { id: 42, name: "0xNovelAgent", status: 1, expired_time: -1 },
             { id: 43, name: "0xNovelAgent", status: 1, expired_time: -1 },
+            {
+              id: 44,
+              name: "0xNovelAgent",
+              status: 1,
+              expired_time: 0,
+              unlimited_quota: false,
+              remain_quota: 0,
+            },
           ],
         },
       });
@@ -196,6 +229,76 @@ test("login reuses only the newest active product key and restores user identity
     assert.equal(restored.user.displayName, "0xn_cookie_user");
   } finally {
     relayCredentialStore.clear();
+  }
+});
+
+test("saved zero-quota product key is rejected before entering the product", async () => {
+  const fakeFetch = async () => jsonResponse(balanceEnvelope({
+    tokenUnlimited: false,
+    tokenQuota: 0,
+  }));
+  const client = new RelayHttpClient(fakeFetch, () => "https://relay.example.test");
+  const auth = new RelayAuthService(client, new RelayUsageService(client));
+
+  await assert.rejects(
+    () => auth.restore({
+      token: "sk-expired-product-token",
+      user: {
+        id: "123",
+        username: "0xn_demo_user",
+        displayName: "demo",
+      },
+    }),
+    (error) => error instanceof RelayHttpError
+      && error.statusCode === 401
+      && error.message === "创作凭证已失效，请重新登录以刷新凭证。",
+  );
+});
+
+test("consumer-facing relay errors hide SDK troubleshooting details", () => {
+  const message = toConsumerRelayErrorMessage(
+    new Error(
+      "[STRUCTURED_OUTPUT:transport_error] 401 Invalid token "
+      + "Troubleshooting URL: https://docs.langchain.com/errors/MODEL_AUTHENTICATION/",
+    ),
+    "生成没有完成。",
+  );
+  assert.equal(message, "创作凭证已失效，请退出账号后重新登录。");
+
+  const previousMode = process.env.AI_NOVEL_PRODUCT_MODE;
+  process.env.AI_NOVEL_PRODUCT_MODE = "consumer";
+  try {
+    const structuredError = new StructuredOutputError({
+      message:
+        "401 Invalid token Troubleshooting URL: "
+        + "https://docs.langchain.com/errors/MODEL_AUTHENTICATION/",
+      category: "transport_error",
+      diagnostics: {},
+    });
+    assert.equal(
+      structuredError.message,
+      "[STRUCTURED_OUTPUT:transport_error] 创作凭证已失效，请退出账号后重新登录。",
+    );
+  } finally {
+    if (previousMode === undefined) {
+      delete process.env.AI_NOVEL_PRODUCT_MODE;
+    } else {
+      process.env.AI_NOVEL_PRODUCT_MODE = previousMode;
+    }
+  }
+});
+
+test("consumer relay defaults to a model exposed by the owned relay", () => {
+  const previous = process.env.OXNOVEL_RELAY_MODEL;
+  delete process.env.OXNOVEL_RELAY_MODEL;
+  try {
+    assert.equal(resolveRelayModelAlias(), "qwen3.6-plus");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.OXNOVEL_RELAY_MODEL;
+    } else {
+      process.env.OXNOVEL_RELAY_MODEL = previous;
+    }
   }
 });
 

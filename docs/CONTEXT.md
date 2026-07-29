@@ -27,7 +27,7 @@
 - 桌面发布默认中转配置集中保存在 `desktop/config/consumer-release.defaults.json`，当前账号根地址为 `https://api.0xkey.cn`、模型根地址为 `https://api.0xkey.cn/v1`；发布环境变量可以覆盖，但任何 Beta/正式安装包都不得再生成空中转策略。
 - 中转注册固定发送 `username`、`password`、可选 `email` 和可选 `verification_code`，登录固定发送 `username`、`password`；两者都统一为带 `0xn_` 前缀的中转用户名。
 - 注册接口不被假定直接返回 API Key。同步认证固定执行“注册（仅注册模式）→ 登录取得 Cookie/用户 ID → 查找或创建名称严格为 `0xNovelAgent` 的有效 Key → 取回明文 → 统一规范为 `sk-...` → 用余额接口校验归属”。
-- 同一账号优先复用 ID 最大、启用且未过期的 `0xNovelAgent` Key；其他客户端 Key、禁用 Key 和过期 Key不复用。中转返回裸 key 时只在服务端边界补 `sk-`，桌面 Broker、`safeStorage` 和后续 Bearer 请求只接受规范 `sk-`。
+- 同一账号优先复用 ID 最大、启用、未过期且仍有 Key 额度的 `0xNovelAgent` Key；其他客户端 Key、禁用 Key、过期 Key 和零额度 Key 不复用。新建产品 Key 固定发送 `expired_time: -1`、`unlimited_quota: true`、`remain_quota: 0` 和 `model_limits_enabled: false`，由用户账户余额统一承担模型消费。中转返回裸 key 时只在服务端边界补 `sk-`，桌面 Broker、`safeStorage` 和后续 Bearer 请求只接受规范 `sk-`。
 - 桌面加密会话同时保存稳定用户 ID、用户名和显示名；恢复时以同一 Token 的余额接口重新校准用户归属，不再构造 `pending` 占位用户。保持登录保存 Token，不保存账号密码明文。
 - 新书采用四层规划：先生成全书骨架和全部卷规划，只详细展开当前剧情阶段，并按需生成下一章任务。
 - 新书初始化按故事方向、全书骨架、全部卷规划、当前剧情阶段和第一章分五步，每一步都由用户确认后才产生下一次付费调用。
@@ -40,7 +40,7 @@
 - 后续剧情调整由系统判断最小的未来影响范围；已完成章节和卷默认锁定，普通用户只确认推荐调整方案，不直接操作重规划内部资产。
 - 商业版不引入第三方分析、崩溃自动上报或远程日志；公开站、桌面更新和正式 C 端 AI 请求只能使用显式配置的自有地址。
 - 正式 C 端所有 AI 能力只允许经过自有中转站，不提供用户 API Key、内置供应商直连、自定义 Provider 或专家直连开关；该边界由本机服务强制执行，旧直连能力只能保留在构建时隔离的内部开发包中。
-- 第一版不提供模型选择，由系统按任务自动路由；中转按实际调用量扣费，章节内部必要调用统一汇总为该章消费。
+- 第一版不提供模型选择，由产品内部选择中转公开可用模型；当前默认 `qwen3.6-plus`，发布环境可通过 `OXNOVEL_RELAY_MODEL` 覆盖。中转按实际调用量扣费，章节内部必要调用统一汇总为该章消费。
 - 正文始终可直接编辑；AI 修改、续写和整章重生成只生成候选稿，用户采用前不覆盖正文。自动保存与历史版本分离，关键节点保存不可变快照，采用、放弃和恢复版本本身不调用 AI。
 - C 端章节持久化明确分为 `ConsumerChapterDraft`（可变工作草稿）、`ConsumerChapterCandidate`（待采用候选）、`ConsumerChapterVersion`（不可变历史版本）和 `ConsumerCreationOperation`（付费创作操作）；草稿使用递增 revision 做乐观并发控制，任何后台结果都不能直接写入用户正在编辑的正文。
 - AI 修改与整章重写分别通过 `consumer.chapter.revise@v1` 和 `consumer.chapter.rewrite@v1` 进入 Prompt Registry；操作开始时冻结来源正文、草稿 revision 与正文哈希，流式结果只进入 `ConsumerCreationOperation.receivedContent`，成功后才创建候选稿。

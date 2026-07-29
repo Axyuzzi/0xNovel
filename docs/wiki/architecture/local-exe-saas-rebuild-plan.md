@@ -1526,11 +1526,11 @@ flowchart LR
 |---|---|---|
 | 注册 | `POST /api/user/register`；请求只发送 `username`、`password`、可选 `email`、可选 `verification_code`；用户名统一增加 `0xn_` 前缀 | 注册响应成功后立即进入登录换 Key 链路；任一步失败都不建立本机会话 |
 | 登录 | `POST /api/user/login`；请求只发送 `username`、`password`；使用响应 Cookie 和用户 ID 访问 Key 管理接口 | 缺少 Cookie、用户 ID 或 Key 时返回登录失败，不保存半成品凭证 |
-| 取得 Key | `GET /api/token` 查找名称严格等于 `0xNovelAgent`、状态有效且未过期的 Key；优先复用 ID 最大的有效项；没有时 `POST /api/token` 创建，再用 `POST /api/token/{id}/key` 取明文 | 不复用其他客户端的 Key；禁用或过期 Key 不复用；无法取得明文 Key 时不建立会话 |
+| 取得 Key | `GET /api/token` 查找名称严格等于 `0xNovelAgent`、状态有效、未过期且仍有 Key 额度的项；优先复用 ID 最大的有效项；没有时以 `expired_time: -1`、`unlimited_quota: true`、`remain_quota: 0`、`model_limits_enabled: false` 调用 `POST /api/token`，再用 `POST /api/token/{id}/key` 取明文 | 不复用其他客户端、禁用、过期或零额度 Key；保持登录恢复发现旧 Key 无额度时直接回到登录，不让用户进入创作后再看到模型鉴权失败 |
 | Key 规范 | 中转可能返回裸 key 或完整 `sk-`；服务端统一规范化并校验为 `sk-...`，此后只保存和发送规范形式 | 空值、过短、过长或桌面 Broker 返回非 `sk-` 一律拒绝 |
-| 会话恢复 | Windows `safeStorage` 保存规范 Token、稳定用户 ID、用户名和显示名；旧版只含 Token/ID 的记录可迁移；恢复时以余额接口返回的用户归属重新校准身份 | 余额接口拒绝或用户归属异常时不恢复；不再使用 `pending` 占位用户 |
+| 会话恢复 | Windows `safeStorage` 保存规范 Token、稳定用户 ID、用户名和显示名；旧版只含 Token/ID 的记录可迁移；恢复时以余额接口返回的用户归属和 Key 额度状态重新校准身份 | 余额接口拒绝、用户归属异常或产品 Key 无额度时不恢复；不再使用 `pending` 占位用户 |
 | 共用鉴权 | AI、余额、消费日志、支付信息、微信下单和订单查询均使用同一 `Authorization: Bearer sk-...` | 任一接口返回 `401/403` 都按登录失效处理，不切换到用户自填 Key 或直连供应商 |
-| AI 输出 | OpenAI 兼容 `/chat/completions` 同时覆盖普通响应、SSE 流式响应和 JSON Schema 结构化响应；第一版模型固定为中转别名 `auto` | 协议解析失败按本次操作失败/结果未知处理，不自动重放付费请求 |
+| AI 输出 | OpenAI 兼容 `/chat/completions` 同时覆盖普通响应、SSE 流式响应和 JSON Schema 结构化响应；第一版由产品内部固定选择中转公开可用模型，当前默认 `qwen3.6-plus`，用户不需要选择 | 协议解析失败按本次操作失败/结果未知处理，不自动重放付费请求 |
 | 充值与消费 | 下单金额必须为正整数；订单 `money` 必须与到账 `amount` 1:1；真实模型验收必须同时看到 `balance` 减少、`usedBalance` 增加并出现消费日志 | 金额不一致时阻止用户付款；余额和日志不一致时停止收费创作并人工排查 |
 
 本地零扣费门禁：
@@ -1547,7 +1547,7 @@ pnpm run verify:relay-contract
 $env:OXNOVEL_RELAY_CONTRACT_TOKEN = "sk-..."
 $env:OXNOVEL_RELAY_ACCOUNT_BASE_URL = "https://账号接口域名"
 $env:OXNOVEL_RELAY_BASE_URL = "https://模型接口域名/v1"
-$env:OXNOVEL_RELAY_MODEL = "auto"
+$env:OXNOVEL_RELAY_MODEL = "qwen3.6-plus"
 
 # 已支付一笔真实小额订单后再填写；脚本只查询，不创建或支付订单
 $env:OXNOVEL_RELAY_CONTRACT_PAID_ORDER_NO = "真实订单号"

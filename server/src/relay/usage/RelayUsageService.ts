@@ -37,6 +37,23 @@ export class RelayUsageService {
 
   async getBalance(token: string): Promise<ConsumerBalance> {
     const balance = await this.getRelayBalance(token);
+    return this.toConsumerBalance(balance);
+  }
+
+  async getSessionBalance(token: string): Promise<ConsumerBalance> {
+    const balance = await this.getRelayBalance(token);
+    const tokenHasQuota = balance.tokenUnlimited
+      || (balance.tokenQuota !== null && balance.tokenQuota > 0);
+    if (balance.tokenName !== "0xNovelAgent" || !tokenHasQuota) {
+      throw new RelayHttpError(
+        "创作凭证已失效，请重新登录以刷新凭证。",
+        401,
+      );
+    }
+    return this.toConsumerBalance(balance);
+  }
+
+  private toConsumerBalance(balance: RelayBalance): ConsumerBalance {
     return consumerBalanceSchema.parse({
       userId: String(balance.userId),
       username: balance.username,

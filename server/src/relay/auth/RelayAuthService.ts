@@ -34,6 +34,17 @@ function readNumber(record: Record<string, unknown> | null, keys: string[]): num
   return null;
 }
 
+function readBoolean(record: Record<string, unknown> | null, keys: string[]): boolean | null {
+  if (!record) return null;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "boolean") {
+      return value;
+    }
+  }
+  return null;
+}
+
 function readString(record: Record<string, unknown> | null, keys: string[]): string {
   if (!record) return "";
   for (const key of keys) {
@@ -148,7 +159,7 @@ export class RelayAuthService {
 
   async restore(snapshot: RelayCredentialSnapshot): Promise<RelaySession> {
     const token = assertUsableKey(snapshot.token);
-    const balance = await this.usageService.getBalance(token);
+    const balance = await this.usageService.getSessionBalance(token);
     const suppliedUser = snapshot.user;
     const user: RelayUserSummary = {
       id: balance.userId,
@@ -207,7 +218,13 @@ export class RelayAuthService {
       const createResponse = await this.client.request({
         path: resolveRelayEndpointPaths().apiTokenCreate,
         method: "POST",
-        body: { name: "0xNovelAgent" },
+        body: {
+          name: "0xNovelAgent",
+          expired_time: -1,
+          remain_quota: 0,
+          unlimited_quota: true,
+          model_limits_enabled: false,
+        },
         cookie,
         extraHeaders: sessionHeaders,
       });
@@ -276,7 +293,19 @@ export class RelayAuthService {
         }
 
         const expiresAt = readNumber(item, ["expired_time", "expires_at", "expiresAt"]);
-        return expiresAt === null || expiresAt <= 0 || expiresAt > nowSeconds;
+        if (expiresAt !== null && expiresAt !== -1 && expiresAt <= nowSeconds) {
+          return false;
+        }
+
+        const unlimitedQuota = readBoolean(
+          item,
+          ["unlimited_quota", "unlimitedQuota", "tokenUnlimited"],
+        );
+        const remainingQuota = readNumber(
+          item,
+          ["remain_quota", "remainQuota", "tokenQuota"],
+        );
+        return unlimitedQuota !== false || (remainingQuota !== null && remainingQuota > 0);
       })
       .filter((item) => item.id !== undefined && String(item.id).trim())
       .sort((left, right) => {

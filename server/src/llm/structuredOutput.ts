@@ -1,5 +1,7 @@
 import { toJSONSchema, type ZodType } from "zod";
 import type { LLMProvider } from "@0xnovelagent/shared/types/llm";
+import { isConsumerProductMode } from "../config/productMode";
+import { toConsumerRelayErrorMessage } from "../relay/errors/consumerRelayError";
 import type { ModelRouteRequestProtocol } from "@0xnovelagent/shared/types/novel";
 import { isBuiltInProvider } from "./providers";
 
@@ -432,7 +434,13 @@ export class StructuredOutputError extends Error {
     category: StructuredOutputErrorCategory;
     diagnostics: StructuredOutputDiagnostics;
   }) {
-    super(`[STRUCTURED_OUTPUT:${input.category}] ${input.message}`);
+    const message = isConsumerProductMode()
+      ? toConsumerRelayErrorMessage(
+        new Error(input.message),
+        "创作服务暂时没有完成这一步。",
+      )
+      : input.message;
+    super(`[STRUCTURED_OUTPUT:${input.category}] ${message}`);
     this.name = "StructuredOutputError";
     this.category = input.category;
     this.diagnostics = input.diagnostics;
