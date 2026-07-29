@@ -6,11 +6,12 @@ import type { UtilityProcess } from "electron";
 import { utilityProcess } from "electron";
 import { appendDesktopLog, logDesktopError } from "./logging";
 import {
-  resolveDesktopAppDataDir,
+  resolveDesktopProfileDataDir,
   resolveDesktopResourcesDir,
   resolvePackagedServerEntry,
   resolveWorkspaceRoot,
 } from "./paths";
+import { resolvePackagedConsumerReleasePolicy } from "./releasePolicy";
 
 type DesktopServerMode = "external" | "managed";
 
@@ -80,13 +81,23 @@ export async function resolveDesktopServerPort(options: { isPackaged: boolean })
   return mode === "external" ? resolveExternalServerPort() : resolveManagedServerPort();
 }
 
-async function waitForServerHealth(port: number, timeoutMs = 30_000): Promise<void> {
+const LOCAL_API_SESSION_HEADER = "x-0xnovel-local-session";
+
+async function waitForServerHealth(
+  port: number,
+  localApiSessionToken: string,
+  timeoutMs = 30_000,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   const healthUrl = `http://127.0.0.1:${port}/api/health`;
 
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(healthUrl);
+      const response = await fetch(healthUrl, {
+        headers: {
+          [LOCAL_API_SESSION_HEADER]: localApiSessionToken,
+        },
+      });
       if (response.ok) {
         return;
       }
@@ -103,6 +114,7 @@ async function waitForServerHealth(port: number, timeoutMs = 30_000): Promise<vo
 async function waitForServerHealthOrExit(
   port: number,
   processHandle: ManagedDesktopProcess,
+  localApiSessionToken: string,
   timeoutMs = 45_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -114,7 +126,11 @@ async function waitForServerHealthOrExit(
     }
 
     try {
-      const response = await fetch(healthUrl);
+      const response = await fetch(healthUrl, {
+        headers: {
+          [LOCAL_API_SESSION_HEADER]: localApiSessionToken,
+        },
+      });
       if (response.ok) {
         return;
       }
@@ -198,14 +214,22 @@ function appendProcessOutput(
   });
 }
 
-function startWorkspaceManagedServer(port: number): ManagedDesktopProcess {
-  const appDataDir = resolveDesktopAppDataDir();
+function startWorkspaceManagedServer(
+  port: number,
+  localApiSessionToken: string,
+  credentialBrokerToken: string,
+  profileId: string,
+): ManagedDesktopProcess {
+  const appDataDir = resolveDesktopProfileDataDir(profileId);
   const { command, args, cwd } = buildManagedServerCommand();
   const child = spawn(command, args, {
     cwd,
     env: {
       ...process.env,
       AI_NOVEL_RUNTIME: "desktop",
+      AI_NOVEL_PRODUCT_MODE: "consumer",
+      OXNOVEL_LOCAL_API_SESSION_TOKEN: localApiSessionToken,
+      OXNOVEL_CREDENTIAL_BROKER_TOKEN: credentialBrokerToken,
       AI_NOVEL_APP_DATA_DIR: appDataDir,
       PORT: String(port),
       HOST: "127.0.0.1",
@@ -234,20 +258,34 @@ function startWorkspaceManagedServer(port: number): ManagedDesktopProcess {
   };
 }
 
-function startPackagedManagedServer(port: number): ManagedDesktopProcess {
+function startPackagedManagedServer(
+  port: number,
+  localApiSessionToken: string,
+  credentialBrokerToken: string,
+  profileId: string,
+): ManagedDesktopProcess {
+  const releasePolicy = resolvePackagedConsumerReleasePolicy();
   const child = utilityProcess.fork(resolvePackagedServerEntry(), [], {
     cwd: resolveDesktopResourcesDir(),
     env: {
       ...process.env,
       NODE_ENV: "production",
       AI_NOVEL_RUNTIME: "desktop",
-      AI_NOVEL_APP_DATA_DIR: resolveDesktopAppDataDir(),
+      AI_NOVEL_PRODUCT_MODE: "consumer",
+      OXNOVEL_LOCAL_API_SESSION_TOKEN: localApiSessionToken,
+      OXNOVEL_CREDENTIAL_BROKER_TOKEN: credentialBrokerToken,
+      AI_NOVEL_APP_DATA_DIR: resolveDesktopProfileDataDir(profileId),
       AI_NOVEL_DATABASE_MODE: "sqlite",
       DATABASE_URL: DESKTOP_SQLITE_DATABASE_URL,
       PORT: String(port),
       HOST: "127.0.0.1",
       ALLOW_LAN: "false",
       RAG_ENABLED: process.env.RAG_ENABLED?.trim() || "false",
+      LLM_DEBUG_LOG: "false",
+      OXNOVEL_RELAY_BASE_URL: releasePolicy.relayBaseUrl ?? "",
+      OXNOVEL_RELAY_ACCOUNT_BASE_URL: releasePolicy.relayAccountBaseUrl ?? "",
+      OXNOVEL_RELAY_ALLOWED_ORIGINS: releasePolicy.allowedRelayOrigins.join(","),
+      OXNOVEL_RELAY_REGISTER_AUTH_CODE: releasePolicy.registerAuthCode ?? "",
     },
     stdio: "pipe",
     serviceName: "AI Novel Local Server",
@@ -277,13 +315,19 @@ function startPackagedManagedServer(port: number): ManagedDesktopProcess {
   };
 }
 
-async function startManagedServer(port: number, isPackaged: boolean): Promise<DesktopServerHandle> {
+async function startManagedServer(
+  port: number,
+  isPackaged: boolean,
+  localApiSessionToken: string,
+  credentialBrokerToken: string,
+  profileId: string,
+): Promise<DesktopServerHandle> {
   const managedProcess = isPackaged
-    ? startPackagedManagedServer(port)
-    : startWorkspaceManagedServer(port);
+    ? startPackagedManagedServer(port, localApiSessionToken, credentialBrokerToken, profileId)
+    : startWorkspaceManagedServer(port, localApiSessionToken, credentialBrokerToken, profileId);
 
   try {
-    await waitForServerHealthOrExit(port, managedProcess, 45_000);
+    await waitForServerHealthOrExit(port, managedProcess, localApiSessionToken, 45_000);
     appendDesktopLog("desktop.server.process", `Desktop server is healthy at http://127.0.0.1:${port}/api/health.`);
   } catch (error) {
     await managedProcess.stop();
@@ -297,12 +341,18 @@ async function startManagedServer(port: number, isPackaged: boolean): Promise<De
   };
 }
 
-export async function startDesktopServer(options: { isPackaged: boolean; port?: number }): Promise<DesktopServerHandle> {
+export async function startDesktopServer(options: {
+  isPackaged: boolean;
+  localApiSessionToken: string;
+  credentialBrokerToken: string;
+  profileId: string;
+  port?: number;
+}): Promise<DesktopServerHandle> {
   const mode = resolveServerMode(options.isPackaged);
 
   if (mode === "external") {
     const port = options.port ?? resolveExternalServerPort();
-    await waitForServerHealth(port, 45_000);
+    await waitForServerHealth(port, options.localApiSessionToken, 45_000);
     return {
       mode,
       port,
@@ -311,5 +361,11 @@ export async function startDesktopServer(options: { isPackaged: boolean; port?: 
   }
 
   const port = options.port ?? await resolveManagedServerPort();
-  return startManagedServer(port, options.isPackaged);
+  return startManagedServer(
+    port,
+    options.isPackaged,
+    options.localApiSessionToken,
+    options.credentialBrokerToken,
+    options.profileId,
+  );
 }

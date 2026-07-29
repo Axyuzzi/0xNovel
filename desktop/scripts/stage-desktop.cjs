@@ -8,6 +8,7 @@ const buildDir = path.join(desktopDir, "build");
 const appDir = path.join(buildDir, "app");
 const resourcesDir = path.join(buildDir, "resources");
 const appUpdateConfigPath = path.join(resourcesDir, "app-update.yml");
+const consumerReleasePolicyPath = path.join(resourcesDir, "consumer-release.json");
 const clientSourceDir = path.join(repoRoot, "client", "dist");
 const clientTargetDir = path.join(resourcesDir, "client", "dist");
 const serverEntry = path.join(appDir, "node_modules", "@0xnovelagent", "server", "dist", "app.js");
@@ -64,6 +65,63 @@ function resolveDesktopUpdateUrl() {
     || process.env.AI_NOVEL_DESKTOP_UPDATE_URL
     || ""
   ).trim();
+}
+
+function normalizeOwnedHttpsUrl(value, environmentName, required) {
+  const configured = (value || "").trim();
+  if (!configured) {
+    if (required) {
+      throw new Error(`${environmentName} is required for a public consumer release.`);
+    }
+    return null;
+  }
+  const parsed = new URL(configured);
+  if (
+    parsed.protocol !== "https:"
+    || parsed.username
+    || parsed.password
+    || parsed.hash
+  ) {
+    throw new Error(`${environmentName} must be an HTTPS URL without credentials or a fragment.`);
+  }
+  return parsed.toString().replace(/\/$/u, "");
+}
+
+function writeConsumerReleasePolicy() {
+  const releaseChannel = (process.env.AI_NOVEL_RELEASE_CHANNEL || "beta").trim().toLowerCase();
+  const publicRelease = releaseChannel !== "beta";
+  const relayBaseUrl = normalizeOwnedHttpsUrl(
+    process.env.OXNOVEL_RELAY_BASE_URL,
+    "OXNOVEL_RELAY_BASE_URL",
+    publicRelease,
+  );
+  const relayAccountBaseUrl = normalizeOwnedHttpsUrl(
+    process.env.OXNOVEL_RELAY_ACCOUNT_BASE_URL || process.env.OXNOVEL_RELAY_BASE_URL,
+    "OXNOVEL_RELAY_ACCOUNT_BASE_URL",
+    publicRelease,
+  );
+  const updateUrl = normalizeOwnedHttpsUrl(
+    resolveDesktopUpdateUrl(),
+    "OXNOVEL_DESKTOP_UPDATE_URL",
+    publicRelease,
+  );
+  const allowedRelayOrigins = Array.from(new Set(
+    [relayBaseUrl, relayAccountBaseUrl]
+      .filter(Boolean)
+      .map((url) => new URL(url).origin),
+  ));
+  const policy = {
+    schemaVersion: 1,
+    productMode: "consumer",
+    releaseChannel,
+    relayBaseUrl,
+    relayAccountBaseUrl,
+    allowedRelayOrigins,
+    // 内部注册鉴权码：使中转注册接口返回明文 sk- key。仅 beta 验收用，公开发布需重新评估是否固化。
+    registerAuthCode: (process.env.OXNOVEL_RELAY_REGISTER_AUTH_CODE || "").trim() || null,
+    updateUrl,
+  };
+  fs.writeFileSync(consumerReleasePolicyPath, `${JSON.stringify(policy, null, 2)}\n`, "utf8");
 }
 
 function writeDesktopUpdaterConfig() {
@@ -241,6 +299,7 @@ function main() {
   ensureCleanDir(buildDir);
   ensureDir(resourcesDir);
   ensureDir(path.dirname(clientTargetDir));
+  writeConsumerReleasePolicy();
 
   runPnpm([
     "--filter",

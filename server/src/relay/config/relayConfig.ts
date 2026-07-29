@@ -1,0 +1,106 @@
+function normalizeBaseUrl(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function assertAllowedRelayOrigin(parsed: URL): void {
+  const allowedOrigins = (process.env.OXNOVEL_RELAY_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const requiresAllowlist =
+    process.env.NODE_ENV === "production"
+    && process.env.AI_NOVEL_PRODUCT_MODE?.trim().toLowerCase() === "consumer";
+  if (requiresAllowlist && allowedOrigins.length === 0) {
+    throw new Error("创作服务安全策略未配置，已停止本次请求。");
+  }
+  if (allowedOrigins.length > 0 && !allowedOrigins.includes(parsed.origin)) {
+    throw new Error("创作服务地址不在允许范围内，已停止本次请求。");
+  }
+}
+
+function resolveSecureBaseUrl(environmentName: string, fallbackEnvironmentName?: string): string {
+  const configured = process.env[environmentName]?.trim()
+    || (fallbackEnvironmentName ? process.env[fallbackEnvironmentName]?.trim() : "");
+  if (!configured) {
+    throw new Error("创作服务暂不可用，请稍后重试。");
+  }
+
+  const parsed = new URL(configured);
+  const isLoopbackDevelopmentUrl =
+    process.env.NODE_ENV !== "production"
+    && (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost");
+  if (parsed.protocol !== "https:" && !isLoopbackDevelopmentUrl) {
+    throw new Error("创作服务连接不安全，已停止本次请求。");
+  }
+  assertAllowedRelayOrigin(parsed);
+
+  return normalizeBaseUrl(parsed.toString());
+}
+
+export function resolveRelayBaseUrl(): string {
+  return resolveSecureBaseUrl("OXNOVEL_RELAY_BASE_URL");
+}
+
+export function resolveRelayAccountBaseUrl(): string {
+  return resolveSecureBaseUrl("OXNOVEL_RELAY_ACCOUNT_BASE_URL", "OXNOVEL_RELAY_BASE_URL");
+}
+
+export function resolveRelayModelAlias(): string {
+  return process.env.OXNOVEL_RELAY_MODEL?.trim() || "auto";
+}
+
+/**
+ * 内部注册鉴权码：调用中转内部注册接口时作为 Authorization: Bearer 头携带，
+ * 使注册能返回可用的明文 sk- key（中转对公开注册不返回明文 key）。
+ * 不配置时为空，注册仍可调用但拿不到明文 key。
+ */
+export function resolveRelayRegisterAuthCode(): string {
+  return process.env.OXNOVEL_RELAY_REGISTER_AUTH_CODE?.trim() ?? "";
+}
+
+function resolveRelayPath(environmentName: string, fallback: string): string {
+  const configured = process.env[environmentName]?.trim() || fallback;
+  if (!configured.startsWith("/") || configured.startsWith("//")) {
+    throw new Error(`中转接口路径配置无效：${environmentName}`);
+  }
+  return configured;
+}
+
+export interface RelayEndpointPaths {
+  register: string;
+  login: string;
+  sessionToken: string;
+  balance: string;
+  usageLogs: string;
+  paymentInfo: string;
+  wechatNativePayment: string;
+  paymentOrder: (orderNo: string) => string;
+}
+
+export function resolveRelayEndpointPaths(): RelayEndpointPaths {
+  const paymentOrderPrefix = resolveRelayPath(
+    "OXNOVEL_RELAY_PAYMENT_ORDER_PATH",
+    "/api/usage/payment/orders",
+  );
+  return {
+    register: resolveRelayPath("OXNOVEL_RELAY_REGISTER_PATH", "/api/user/register"),
+    login: resolveRelayPath("OXNOVEL_RELAY_LOGIN_PATH", "/api/user/login"),
+    sessionToken: resolveRelayPath("OXNOVEL_RELAY_SESSION_TOKEN_PATH", "/api/user/token"),
+    balance: resolveRelayPath("OXNOVEL_RELAY_BALANCE_PATH", "/api/usage/balance"),
+    usageLogs: resolveRelayPath("OXNOVEL_RELAY_USAGE_LOGS_PATH", "/api/usage/logs"),
+    paymentInfo: resolveRelayPath("OXNOVEL_RELAY_PAYMENT_INFO_PATH", "/api/usage/payment/info"),
+    wechatNativePayment: resolveRelayPath(
+      "OXNOVEL_RELAY_WECHAT_NATIVE_PATH",
+      "/api/usage/payment/wechat/native",
+    ),
+    paymentOrder: (orderNo: string) => `${paymentOrderPrefix}/${encodeURIComponent(orderNo)}`,
+  };
+}
+
+export function resolveRelayRequestTimeoutMs(): number {
+  const configured = Number(process.env.OXNOVEL_RELAY_TIMEOUT_MS ?? "");
+  if (!Number.isFinite(configured) || configured < 1_000 || configured > 120_000) {
+    return 30_000;
+  }
+  return Math.floor(configured);
+}
