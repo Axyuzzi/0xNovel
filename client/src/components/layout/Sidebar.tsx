@@ -33,6 +33,7 @@ import { getTaskOverview } from "@/api/tasks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { VisualAssetLibraryDialog } from "@/components/visualAssets";
+import { APP_PRODUCT_MODE } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -87,6 +88,18 @@ const navGroups: NavGroup[] = [
   },
 ];
 
+const consumerNavGroups: NavGroup[] = [
+  {
+    title: "创作",
+    items: [
+      { to: "/", label: "首页", icon: House },
+      { to: "/novels", label: "我的作品", icon: BookOpenText },
+      { to: "/materials", label: "素材", icon: Database },
+      { to: "/account", label: "我的", icon: UsersRound },
+    ],
+  },
+];
+
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
@@ -97,6 +110,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [visualAssetLibraryOpen, setVisualAssetLibraryOpen] = useState(false);
 
   useEffect(() => {
+    if (APP_PRODUCT_MODE === "consumer") {
+      return;
+    }
     const timer = window.setTimeout(() => setBadgeQueriesEnabled(true), 500);
     return () => window.clearTimeout(timer);
   }, []);
@@ -133,6 +149,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const autoDirectorFollowUpCount = autoDirectorFollowUpQuery.data?.data?.totalCount ?? 0;
   const knowledgeDocuments = knowledgeQuery.data?.data ?? [];
   const failedIndexCount = knowledgeDocuments.filter((item) => item.latestIndexStatus === "failed").length;
+  const activeNavGroups = APP_PRODUCT_MODE === "consumer" ? consumerNavGroups : navGroups;
 
   const renderBadge = (to: string) => {
     if (to === "/comic") {
@@ -219,7 +236,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       <nav className="space-y-4">
-        {navGroups.map((group) => (
+        {activeNavGroups.map((group) => (
           <div key={group.title} className="space-y-1">
             {!collapsed ? (
               <div className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground/80">
