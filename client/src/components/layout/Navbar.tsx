@@ -25,35 +25,39 @@ export default function Navbar(props: NavbarProps) {
   const isConsumerProduct = APP_PRODUCT_MODE === "consumer";
 
   return (
-    <header className="flex h-16 min-w-0 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6">
-      <div className="flex min-w-0 items-center gap-2">
-        <DesktopBrandMark className="h-8 w-8 shrink-0 drop-shadow-none" />
+    <header className="warm-ink-topbar flex h-16 min-w-0 items-center justify-between gap-3 border-b px-4 sm:px-6">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="grid h-9 w-9 place-items-center rounded-xl border border-primary/15 bg-primary/10">
+          <DesktopBrandMark className="h-7 w-7 shrink-0 drop-shadow-none" />
+        </div>
         <div className="flex min-w-0 flex-col leading-tight">
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 truncate text-sm font-semibold">0xNovelAgent</span>
+            <span className="min-w-0 truncate text-sm font-semibold tracking-tight">0xNovel</span>
             {!isConsumerProduct ? <AppVersionBadge /> : null}
             {!isConsumerProduct ? <ProjectGithubLink /> : null}
           </div>
-          <span className="hidden truncate text-[11px] text-muted-foreground sm:block">0xNovelAgent</span>
+          <span className="hidden truncate text-[11px] text-muted-foreground sm:block">AI 长篇小说创作工作台</span>
         </div>
       </div>
-      {!isConsumerProduct ? <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-        {!isHome && showWorkspaceToggle ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className={useMobileAutoDirectorShell ? AUTO_DIRECTOR_MOBILE_CLASSES.navbarWorkspaceToggle : undefined}
-            onClick={() => onWorkspaceNavModeChange?.(workspaceNavMode === "workspace" ? "project" : "workspace")}
-          >
-            {workspaceNavMode === "workspace" ? "项目导航" : "创作导航"}
-          </Button>
-        ) : null}
-        <LiveExecutionDialog />
-        <div className={useMobileAutoDirectorShell ? AUTO_DIRECTOR_MOBILE_CLASSES.navbarModelSelector : undefined}>
-          <LLMSelector compact showBadge={false} showHelperText={false} />
+      {!isConsumerProduct ? (
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          {!isHome && showWorkspaceToggle ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={useMobileAutoDirectorShell ? AUTO_DIRECTOR_MOBILE_CLASSES.navbarWorkspaceToggle : undefined}
+              onClick={() => onWorkspaceNavModeChange?.(workspaceNavMode === "workspace" ? "project" : "workspace")}
+            >
+              {workspaceNavMode === "workspace" ? "项目导航" : "创作导航"}
+            </Button>
+          ) : null}
+          <LiveExecutionDialog />
+          <div className={useMobileAutoDirectorShell ? AUTO_DIRECTOR_MOBILE_CLASSES.navbarModelSelector : undefined}>
+            <LLMSelector compact showBadge={false} showHelperText={false} />
+          </div>
         </div>
-      </div> : null}
+      ) : null}
     </header>
   );
 }
