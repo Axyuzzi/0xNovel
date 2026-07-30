@@ -11,7 +11,7 @@ import { Toaster } from "./components/ui/toast";
 import "./index.css";
 import "./styles/warm-ink-theme.css";
 import ConsumerAuthBoundary from "./features/consumerAuth/ConsumerAuthBoundary";
-import { ConsumerSessionProvider } from "./features/consumerAuth/ConsumerAuthContext";
+import { ConsumerSessionProvider } from "./features/consumerAuth/ConsumerSessionContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
