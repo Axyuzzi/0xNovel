@@ -1,6 +1,7 @@
 {
   "name": "@0xnovelagent/desktop",
-  "version": "0.4.16",
+  "version": "0.4.17",
+  "buildNumber": 417,
   "private": true,
   "license": "AGPL-3.0-only",
   "author": "0xNovelAgent Team",
@@ -20,8 +21,7 @@
   },
   "dependencies": {
     "@0xnovelagent/server": "workspace:*",
-    "better-sqlite3": "^12.6.2",
-    "electron-updater": "^6.6.2"
+    "better-sqlite3": "^12.6.2"
   },
   "devDependencies": {
     "@types/node": "^25.3.3",
