@@ -9,8 +9,6 @@ try {
     "--win",
     "nsis",
     "--x64",
-    "--publish",
-    "always",
   ], {
     cwd: repoRoot,
     stdio: "inherit",
@@ -19,6 +17,13 @@ try {
       AI_NOVEL_RELEASE_CHANNEL: "beta",
     },
   });
+  execFileSync(process.execPath, [
+    path.join("desktop", "scripts", "generate-package-release-manifest.cjs"),
+  ], {
+    cwd: repoRoot,
+    stdio: "inherit",
+  });
+  console.log("[publish:desktop:beta] upload the inactive installer through 0xAPI admin when ready.");
 } catch (error) {
   console.error("[publish:desktop:beta] failed.", error);
   process.exit(1);

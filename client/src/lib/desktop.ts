@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { APP_RUNTIME } from "./constants";
+import { runPrepareLogoutHandlers } from "./prepareLogout";
 
 export type DesktopBootstrapState = "launching" | "starting-server" | "loading-ui" | "ready" | "error";
 export type DesktopUpdaterStatus =
@@ -8,7 +9,9 @@ export type DesktopUpdaterStatus =
   | "checking"
   | "update-available"
   | "downloading"
+  | "verifying"
   | "downloaded"
+  | "installing"
   | "not-available"
   | "error";
 
@@ -27,7 +30,14 @@ export interface DesktopUpdaterSnapshot {
   status: DesktopUpdaterStatus;
   message: string;
   currentVersion: string;
+  currentBuildNumber: number;
   availableVersion: string | null;
+  availableBuildNumber: number | null;
+  releaseNotes: string;
+  fileSize: number | null;
+  forcedUpdate: boolean;
+  minSupportedVersion: string | null;
+  updateRequired: boolean;
   progressPercent: number | null;
   bytesPerSecond: number | null;
   channel: string;
@@ -54,7 +64,14 @@ const DEFAULT_UPDATER_SNAPSHOT: DesktopUpdaterSnapshot = {
   status: "disabled",
   message: "Updates are not available in this runtime.",
   currentVersion: "0.0.0",
+  currentBuildNumber: 0,
   availableVersion: null,
+  availableBuildNumber: null,
+  releaseNotes: "",
+  fileSize: null,
+  forcedUpdate: false,
+  minSupportedVersion: null,
+  updateRequired: false,
   progressPercent: null,
   bytesPerSecond: null,
   channel: "beta",
@@ -65,6 +82,8 @@ const DEFAULT_UPDATER_SNAPSHOT: DesktopUpdaterSnapshot = {
   updatedAt: "",
   lastCheckedAt: null,
 };
+
+let currentUpdaterSnapshot = DEFAULT_UPDATER_SNAPSHOT;
 
 function getDesktopBridge() {
   if (typeof window === "undefined" || APP_RUNTIME !== "desktop") {
@@ -87,7 +106,12 @@ export async function checkForDesktopUpdates(): Promise<void> {
 }
 
 export async function quitAndInstallDesktopUpdate(): Promise<void> {
+  await runPrepareLogoutHandlers();
   await getDesktopBridge()?.quitAndInstall?.();
+}
+
+export function isDesktopUpdateRequired(): boolean {
+  return APP_RUNTIME === "desktop" && currentUpdaterSnapshot.updateRequired;
 }
 
 export async function openDesktopLogsDirectory(): Promise<void> {
@@ -225,12 +249,14 @@ export function useDesktopUpdater(): DesktopUpdaterSnapshot {
 
     void bridge.getUpdaterSnapshot().then((nextSnapshot) => {
       if (!cancelled && nextSnapshot) {
+        currentUpdaterSnapshot = nextSnapshot;
         setSnapshot(nextSnapshot);
       }
     });
 
     const unsubscribe = bridge.subscribeUpdaterStatus?.((nextSnapshot) => {
       if (!cancelled && nextSnapshot) {
+        currentUpdaterSnapshot = nextSnapshot;
         setSnapshot(nextSnapshot);
       }
     });

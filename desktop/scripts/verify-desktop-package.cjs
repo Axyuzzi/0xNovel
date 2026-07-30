@@ -25,11 +25,13 @@ const stagedGeneratedPrismaClientEntry = path.join(
 );
 const stagedServerMigrationsDir = path.join(appDir, "node_modules", "@0xnovelagent", "server", "src", "prisma", "migrations");
 const stagedAppUpdateConfig = path.join(buildDir, "resources", "app-update.yml");
+const stagedConsumerReleasePolicy = path.join(buildDir, "resources", "consumer-release.json");
 const stagedClientIndex = path.join(buildDir, "resources", "client", "dist", "index.html");
 const unpackedClientIndex = path.join(unpackedDir, "resources", "client", "dist", "index.html");
 const unpackedAppArchive = path.join(unpackedDir, "resources", "app.asar");
 const unpackedWindowIcon = path.join(unpackedDir, "resources", "icons", "app-icon.ico");
 const unpackedBrandImage = path.join(unpackedDir, "resources", "icons", "app-icon.png");
+const unpackedConsumerReleasePolicy = path.join(unpackedDir, "resources", "consumer-release.json");
 const stagedRuntimeFile = path.join(appDir, "dist", "runtime", "server.js");
 
 function assertExists(targetPath, description) {
@@ -59,6 +61,13 @@ function assertSomeMatch(entries, pattern, description) {
   }
 }
 
+function assertNoMatch(entries, pattern, description) {
+  const matchedEntry = entries.find((entry) => pattern.test(entry));
+  if (matchedEntry) {
+    throw new Error(`Packaged consumer app still contains ${description}: ${matchedEntry}`);
+  }
+}
+
 function main() {
   assertExists(appPackageJsonPath, "staged desktop package.json");
   assertExists(builderWindowIcon, "builder desktop window icon");
@@ -67,6 +76,8 @@ function main() {
   assertExists(unpackedAppArchive, "packaged app archive");
   assertExists(unpackedWindowIcon, "packaged desktop window icon");
   assertExists(unpackedBrandImage, "packaged desktop brand image");
+  assertExists(stagedConsumerReleasePolicy, "staged consumer release policy");
+  assertExists(unpackedConsumerReleasePolicy, "packaged consumer release policy");
   assertExists(stagedRuntimeFile, "desktop runtime server bundle");
   assertNotExists(path.join(appDir, "src"), "desktop source directory inside staged app");
   assertNotExists(path.join(appDir, "node_modules", "electron"), "Electron runtime inside staged app node_modules");
@@ -89,13 +100,64 @@ function main() {
   if (stagedClientIndexSource.includes('src="/assets/') || stagedClientIndexSource.includes('href="/assets/')) {
     throw new Error("Packaged desktop renderer still references absolute /assets paths.");
   }
-  if (fs.existsSync(stagedAppUpdateConfig)) {
-    const updaterConfigSource = fs.readFileSync(stagedAppUpdateConfig, "utf8");
-    if (!updaterConfigSource.includes("provider: generic") || !updaterConfigSource.includes("url:")) {
-      throw new Error("Desktop updater feed configuration must use an explicit generic update URL.");
+  const stagedRendererFiles = [];
+  const collectRendererFiles = (directoryPath) => {
+    for (const entry of fs.readdirSync(directoryPath, { withFileTypes: true })) {
+      const fullPath = path.join(directoryPath, entry.name);
+      if (entry.isDirectory()) {
+        collectRendererFiles(fullPath);
+      } else if (entry.isFile()) {
+        stagedRendererFiles.push(path.relative(path.dirname(stagedClientIndex), fullPath).replace(/\\/g, "/"));
+      }
     }
-    if (updaterConfigSource.includes("ExplosiveCoderflome") || updaterConfigSource.includes("AI-Novel-Writing-Assistant")) {
-      throw new Error("Desktop updater feed must not reference the former upstream repository.");
+  };
+  collectRendererFiles(path.dirname(stagedClientIndex));
+  for (const [pattern, description] of [
+    [/PromptWorkbenchPage-/u, "Prompt workbench route chunk"],
+    [/ModelRoutesPage-/u, "model routing route chunk"],
+    [/TaskCenterPage-/u, "task center route chunk"],
+    [/CreativeHubPage-/u, "professional creative hub route chunk"],
+    [/SettingsPage-/u, "provider settings route chunk"],
+  ]) {
+    assertNoMatch(stagedRendererFiles, pattern, description);
+  }
+  if (fs.existsSync(stagedAppUpdateConfig)) {
+    throw new Error("Packaged desktop must not include the retired latest.yml updater feed.");
+  }
+  const consumerReleasePolicy = JSON.parse(
+    fs.readFileSync(stagedConsumerReleasePolicy, "utf8"),
+  );
+  if (
+    consumerReleasePolicy.schemaVersion !== 2
+    || consumerReleasePolicy.productMode !== "consumer"
+    || !Array.isArray(consumerReleasePolicy.allowedRelayOrigins)
+  ) {
+    throw new Error("Packaged consumer release policy is invalid.");
+  }
+  for (const field of ["plannerModel", "writerModel", "reviewModel"]) {
+    const value = consumerReleasePolicy[field];
+    if (typeof value !== "string" || !value || value.length > 128 || /\s/u.test(value)) {
+      throw new Error(`Packaged consumer release policy requires a valid ${field}.`);
+    }
+  }
+  for (const origin of consumerReleasePolicy.allowedRelayOrigins) {
+    const parsedOrigin = new URL(origin);
+    if (parsedOrigin.protocol !== "https:" || parsedOrigin.origin !== origin) {
+      throw new Error(`Packaged relay allowlist contains an unsafe origin: ${origin}`);
+    }
+  }
+  if (consumerReleasePolicy.releaseChannel !== "beta") {
+    for (const field of ["relayBaseUrl", "relayAccountBaseUrl", "packageReleaseBaseUrl"]) {
+      const value = consumerReleasePolicy[field];
+      if (typeof value !== "string" || new URL(value).protocol !== "https:") {
+        throw new Error(`Public consumer release policy requires HTTPS ${field}.`);
+      }
+    }
+    if (
+      typeof consumerReleasePolicy.packageReleaseCode !== "string"
+      || !/^[A-Za-z0-9_-]{32}$/.test(consumerReleasePolicy.packageReleaseCode)
+    ) {
+      throw new Error("Public consumer release policy requires a 32-character package release code.");
     }
   }
 

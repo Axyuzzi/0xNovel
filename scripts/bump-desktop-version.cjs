@@ -70,9 +70,9 @@ function printNextSteps(nextVersion) {
     "",
     "Next release steps:",
     "1. Update docs/releases/release-notes.md and README.md for user-visible changes.",
-    "2. Commit the version bump and release notes, then merge the release candidate into main.",
-    "3. Run: node scripts/trigger-desktop-release.cjs --dry-run",
-    `4. Publish with tag v${nextVersion} only after the dry run passes.`,
+    "2. Build the signed NSIS installer.",
+    "3. Run: pnpm generate:package-release-manifest",
+    `4. Upload version ${nextVersion} to 0xAPI as inactive, verify its SHA256, then enable it.`,
   ].join("\n"));
 }
 
@@ -88,6 +88,10 @@ function main() {
 
   const packageJson = readDesktopPackageJson();
   const currentVersion = typeof packageJson.version === "string" ? packageJson.version.trim() : "";
+  const currentBuildNumber = Number(packageJson.buildNumber);
+  if (!Number.isInteger(currentBuildNumber) || currentBuildNumber <= 0) {
+    throw new Error("desktop/package.json buildNumber must be a positive integer.");
+  }
   const currentParts = parseStableSemver(currentVersion, "desktop/package.json version");
   const nextParts = parseStableSemver(options.version, "Target version");
 
@@ -97,6 +101,7 @@ function main() {
 
   console.log(`[desktop-version] current=${currentVersion}`);
   console.log(`[desktop-version] next=${options.version}`);
+  console.log(`[desktop-version] build=${currentBuildNumber} -> ${currentBuildNumber + 1}`);
 
   if (options.dryRun) {
     console.log("[desktop-version] dry run passed; desktop/package.json was not changed.");
@@ -105,6 +110,7 @@ function main() {
   }
 
   packageJson.version = options.version;
+  packageJson.buildNumber = currentBuildNumber + 1;
   fs.writeFileSync(desktopPackagePath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
   console.log(`[desktop-version] updated desktop/package.json to ${options.version}.`);
   printNextSteps(options.version);

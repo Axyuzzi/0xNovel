@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { LoaderCircle, RefreshCw } from "lucide-react";
 import { API_BASE_URL, APP_RUNTIME } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
+import { createApiRequestHeaders } from "@/api/requestHeaders";
 
 interface ServerStartupGateProps {
   children: ReactNode;
@@ -20,6 +21,7 @@ async function checkServerReady(signal: AbortSignal): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE_URL}/health`, {
       cache: "no-store",
+      headers: createApiRequestHeaders(),
       signal,
     });
     return response.ok;

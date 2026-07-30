@@ -15,6 +15,9 @@ test("desktop release defaults always include the owned relay endpoints", () => 
   assert.deepEqual(defaults, {
     relayBaseUrl: "https://api.0xkey.cn/v1",
     relayAccountBaseUrl: "https://api.0xkey.cn",
+    plannerModel: "deepseek-v4-flash",
+    writerModel: "qwen3.7-plus",
+    reviewModel: "claude-sonnet-4-6",
   });
 });
 
@@ -36,16 +39,20 @@ test("packaged consumer policy freezes relay origins and rejects mismatches", ()
   const resourcesDir = fs.mkdtempSync(path.join(os.tmpdir(), "0xnovel-release-policy-"));
   const policyPath = path.join(resourcesDir, "consumer-release.json");
   fs.writeFileSync(policyPath, JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
     productMode: "consumer",
     releaseChannel: "release",
     relayBaseUrl: "https://relay.example.com/v1",
     relayAccountBaseUrl: "https://account.example.com",
+    plannerModel: "deepseek-v4-flash",
+    writerModel: "qwen3.7-plus",
+    reviewModel: "claude-sonnet-4-6",
     allowedRelayOrigins: [
       "https://relay.example.com",
       "https://account.example.com",
     ],
-    updateUrl: "https://updates.example.com/windows",
+    packageReleaseBaseUrl: "https://account.example.com",
+    packageReleaseCode: "1234567890abcdefghijklmnopqrstuv",
   }));
 
   const resolved = withResourcesDir(
@@ -57,6 +64,11 @@ test("packaged consumer policy freezes relay origins and rejects mismatches", ()
     "https://relay.example.com",
     "https://account.example.com",
   ]);
+  assert.equal(resolved.plannerModel, "deepseek-v4-flash");
+  assert.equal(resolved.writerModel, "qwen3.7-plus");
+  assert.equal(resolved.reviewModel, "claude-sonnet-4-6");
+  assert.equal(resolved.packageReleaseBaseUrl, "https://account.example.com");
+  assert.equal(resolved.packageReleaseCode, "1234567890abcdefghijklmnopqrstuv");
 
   fs.writeFileSync(policyPath, JSON.stringify({
     ...resolved,

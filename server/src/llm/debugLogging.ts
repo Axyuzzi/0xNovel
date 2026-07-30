@@ -3,6 +3,7 @@ import type { ChatOpenAI } from "@langchain/openai";
 import type { TaskType } from "./modelRouter";
 import type { PromptInvocationMeta } from "../prompting/core/promptTypes";
 import { appendLlmSessionLog } from "./sessionLogFile";
+import { isConsumerProductMode } from "../config/productMode";
 
 const LLM_DEBUG_PATCHED = Symbol("LLM_DEBUG_PATCHED");
 const LOG_TRUE_VALUES = new Set(["1", "true", "on", "yes"]);
@@ -31,6 +32,9 @@ type PatchableChatOpenAI = ChatOpenAI & {
 };
 
 function shouldLogLLMRequests(): boolean {
+  if (isConsumerProductMode()) {
+    return false;
+  }
   const raw = process.env.LLM_DEBUG_LOG?.trim().toLowerCase();
   if (raw && LOG_FALSE_VALUES.has(raw)) {
     return false;

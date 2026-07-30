@@ -8,6 +8,7 @@ import type {
 } from "@0xnovelagent/shared/types/creativeHub";
 import { API_BASE_URL } from "@/lib/constants";
 import { apiClient } from "./client";
+import { createApiRequestHeaders } from "./requestHeaders";
 
 function ensureThreadId(threadId: string): string {
   const normalized = threadId.trim();
@@ -102,9 +103,9 @@ export async function* streamCreativeHubRun(
   };
   const response = await fetch(`${API_BASE_URL}/creative-hub/threads/${resolvedThreadId}/runs/stream`, {
     method: "POST",
-    headers: {
+    headers: createApiRequestHeaders({
       "Content-Type": "application/json",
-    },
+    }),
     body: JSON.stringify(requestBody),
     signal: abortSignal,
   });

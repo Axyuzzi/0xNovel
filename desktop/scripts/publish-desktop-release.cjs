@@ -7,9 +7,8 @@ try {
   execFileSync(process.execPath, [
     path.join("desktop", "scripts", "run-electron-builder.cjs"),
     "--win",
+    "nsis",
     "--x64",
-    "--publish",
-    "always",
   ], {
     cwd: repoRoot,
     stdio: "inherit",
@@ -18,6 +17,13 @@ try {
       AI_NOVEL_RELEASE_CHANNEL: "release",
     },
   });
+  execFileSync(process.execPath, [
+    path.join("desktop", "scripts", "generate-package-release-manifest.cjs"),
+  ], {
+    cwd: repoRoot,
+    stdio: "inherit",
+  });
+  console.log("[publish:desktop:release] upload the inactive installer through 0xAPI admin, verify it, then enable it.");
 } catch (error) {
   console.error("[publish:desktop:release] failed.", error);
   process.exit(1);

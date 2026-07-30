@@ -11,28 +11,18 @@ function firstNonEmpty(...values) {
 
 const releaseChannel = firstNonEmpty(process.env.AI_NOVEL_RELEASE_CHANNEL, "beta").toLowerCase();
 const isBetaRelease = releaseChannel === "beta";
-const updaterChannel = isBetaRelease ? "beta" : "latest";
-const desktopUpdateUrl = firstNonEmpty(
-  process.env.OXNOVEL_DESKTOP_UPDATE_URL,
-  process.env.AI_NOVEL_DESKTOP_UPDATE_URL,
-);
 const windowsSigningLink = firstNonEmpty(
   process.env.CSC_LINK,
   process.env.WIN_CSC_LINK,
   process.env.AI_NOVEL_WINDOWS_CSC_LINK,
   process.env.AI_NOVEL_WINDOWS_CSC_FILE,
 );
-const allowUnsignedRelease =
-  firstNonEmpty(
-    process.env.AI_NOVEL_ALLOW_UNSIGNED_RELEASE,
-    process.env.AI_NOVEL_ALLOW_UNSIGNED_WINDOWS_RELEASE,
-  ).toLowerCase() === "true";
 const hasWindowsSigningMaterial = Boolean(windowsSigningLink);
 const builderIconPath = path.join("builder", "app-icon.ico");
 
-if (!isBetaRelease && !hasWindowsSigningMaterial && !allowUnsignedRelease) {
+if (!isBetaRelease && !hasWindowsSigningMaterial) {
   throw new Error(
-    "Public Windows desktop releases require signing material. Provide CSC_LINK/WIN_CSC_LINK, or explicitly opt in to an unsigned release.",
+    "Public Windows desktop releases require signing material. Provide CSC_LINK/WIN_CSC_LINK.",
   );
 }
 
@@ -58,12 +48,10 @@ module.exports = {
       from: "builder/app-icon-256.png",
       to: "icons/app-icon.png",
     },
-    ...(desktopUpdateUrl
-      ? [{
-          from: "build/resources/app-update.yml",
-          to: "app-update.yml",
-        }]
-      : []),
+    {
+      from: "build/resources/consumer-release.json",
+      to: "consumer-release.json",
+    },
     {
       from: "build/resources/client",
       to: "client",
@@ -80,17 +68,6 @@ module.exports = {
   extraMetadata: {
     main: "dist/main.js",
   },
-  ...(desktopUpdateUrl
-    ? {
-        publish: [{
-          provider: "generic",
-          url: desktopUpdateUrl,
-          channel: updaterChannel,
-        }],
-      }
-    : {}),
-  electronUpdaterCompatibility: ">=2.16",
-  generateUpdatesFilesForAllChannels: false,
   win: {
     icon: builderIconPath,
     // Keep EXE resource editing enabled for unsigned builds so Windows uses the app icon and metadata.

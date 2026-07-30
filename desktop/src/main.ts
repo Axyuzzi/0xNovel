@@ -7,6 +7,7 @@ import { resolveDesktopServerPort, startDesktopServer } from "./runtime/server";
 import {
   isPortableDesktopRuntime,
   resolveDesktopAppDataDir,
+  resolveDesktopBuildNumber,
   resolveDesktopProfileDataDir,
   resolveDesktopLogsDir,
   resolveDesktopRuntimeConfig,
@@ -17,10 +18,12 @@ import {
 } from "./runtime/paths";
 import {
   createBootstrapSnapshot,
+  createUpdaterSnapshot,
   desktopBootstrapStore,
   desktopUpdaterStore,
 } from "./runtime/state";
 import { initializeDesktopUpdater, type DesktopUpdaterController } from "./runtime/updater";
+import { resolvePackagedConsumerReleasePolicy } from "./runtime/releasePolicy";
 import {
   exportCredentialFromServer,
   restoreCredentialToServer,
@@ -138,11 +141,22 @@ function initializeDesktopUpdaterController(): void {
     return;
   }
 
+  const releasePolicy = app.isPackaged
+    ? resolvePackagedConsumerReleasePolicy()
+    : null;
   updaterController = initializeDesktopUpdater({
     currentVersion: app.getVersion(),
+    currentBuildNumber: resolveDesktopBuildNumber(),
     updateChannel: resolveDesktopUpdateChannel(),
     isPackaged: app.isPackaged,
     isPortable: isPortableDesktopRuntime(),
+    apiBaseUrl: releasePolicy?.packageReleaseBaseUrl
+      ?? process.env.OXNOVEL_PACKAGE_RELEASE_BASE_URL?.trim()
+      ?? null,
+    packageCode: releasePolicy?.packageReleaseCode
+      ?? process.env.OXNOVEL_INTERNAL_PACKAGE_CODE?.trim()
+      ?? null,
+    appDataDir: resolveDesktopAppDataDir(),
   });
 }
 
@@ -425,8 +439,31 @@ function registerDesktopIpcHandlers(): void {
     await updaterController?.checkForUpdates();
     return desktopUpdaterStore.getSnapshot();
   });
-  ipcMain.handle("desktop:quit-and-install", () => {
-    updaterController?.quitAndInstall();
+  ipcMain.handle("desktop:quit-and-install", async () => {
+    const installerPath = updaterController?.getDownloadedInstallerPath();
+    if (!installerPath) {
+      throw new Error("新版安装包还没有准备好。");
+    }
+    updaterController?.markInstalling();
+    try {
+      await drainInFlightOperationsFromDesktop();
+    } catch (error) {
+      logDesktopError("desktop.updater.drain", error);
+    }
+    const launchError = await shell.openPath(installerPath);
+    if (launchError) {
+      desktopUpdaterStore.setSnapshot(createUpdaterSnapshot({
+        ...desktopUpdaterStore.getSnapshot(),
+        status: "error",
+        message: "安装程序没有启动成功，请重新下载或稍后重试。",
+        canInstall: true,
+      }));
+      throw new Error(`安装程序没有启动成功：${launchError}`);
+    }
+    await stopServer?.();
+    stopServer = null;
+    allowMainWindowClose = true;
+    app.quit();
     return true;
   });
   ipcMain.handle("desktop:open-logs-directory", () => shell.openPath(resolveDesktopLogsDir()));

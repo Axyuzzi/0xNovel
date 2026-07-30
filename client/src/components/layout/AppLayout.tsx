@@ -16,6 +16,11 @@ import {
   AUTO_DIRECTOR_MOBILE_CLASSES,
   shouldUseAutoDirectorMobileFullWidthContent,
 } from "@/mobile/autoDirector";
+import { APP_PRODUCT_MODE } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+import ConsumerOfflineBanner from "@/features/network/ConsumerOfflineBanner";
+import ConsumerMobileNavigation from "./ConsumerMobileNavigation";
+import DesktopUpdateNotice from "./DesktopUpdateNotice";
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "ai-novel.sidebar.collapsed";
 const WORKSPACE_RAIL_COLLAPSED_STORAGE_KEY = "ai-novel.workspace-rail.collapsed";
@@ -29,6 +34,13 @@ export default function AppLayout() {
   const isMobileViewport = useIsMobileViewport();
 
   const workspaceRoute = useMemo(() => {
+    const setupMatch = matchPath("/novels/:id/setup", location.pathname);
+    if (setupMatch?.params.id) {
+      return {
+        novelId: setupMatch.params.id,
+        chapterId: "",
+      };
+    }
     const editMatch = matchPath("/novels/:id/edit", location.pathname);
     if (editMatch?.params.id) {
       return {
@@ -72,6 +84,37 @@ export default function AppLayout() {
   useEffect(() => {
     setWorkspaceNavMode(isNovelWorkspace ? "workspace" : "project");
   }, [isNovelWorkspace, location.pathname]);
+
+  if (APP_PRODUCT_MODE === "consumer") {
+    const useConsumerMobileNavigation = isMobileViewport && !isNovelWorkspace;
+    return (
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-background">
+        <Navbar />
+        <ConsumerOfflineBanner />
+        <DesktopUpdateNotice />
+        <div className="flex min-h-0 flex-1">
+          {!isNovelWorkspace && !isMobileViewport ? (
+            <Sidebar
+              collapsed={isSidebarCollapsed}
+              onToggle={() => setIsSidebarCollapsed((current) => !current)}
+            />
+          ) : null}
+          <main className={isNovelWorkspace
+            ? "min-w-0 flex-1 overflow-hidden"
+            : cn(
+              DEFAULT_APP_MAIN_CLASS_NAME,
+              isMobileViewport && "h-auto p-4 pb-24",
+            )}
+          >
+            <Suspense fallback={<AppRouteFallback />}>
+              <Outlet />
+            </Suspense>
+          </main>
+        </div>
+        {useConsumerMobileNavigation ? <ConsumerMobileNavigation /> : null}
+      </div>
+    );
+  }
 
   if (useMobileNovelWorkspaceLayout) {
     return (

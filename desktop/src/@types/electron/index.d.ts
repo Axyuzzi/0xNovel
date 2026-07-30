@@ -30,6 +30,7 @@ declare module "electron" {
 
   interface WebContents {
     send(channel: string, ...args: unknown[]): void;
+    getURL(): string;
     once(event: "did-finish-load", listener: () => void): this;
     on(event: "did-finish-load", listener: () => void): this;
   }
@@ -48,6 +49,7 @@ declare module "electron" {
     isMinimized(): boolean;
     once(event: "ready-to-show", listener: () => void): this;
     on(event: "closed", listener: () => void): this;
+    on(event: "close", listener: (event: { preventDefault(): void }) => void): this;
   }
 
   interface BrowserWindowConstructor {
@@ -100,13 +102,27 @@ declare module "electron" {
     filePaths: string[];
   }
 
+  interface SaveDialogOptions {
+    title?: string;
+    defaultPath?: string;
+    buttonLabel?: string;
+    filters?: FileFilter[];
+  }
+
+  interface SaveDialogReturnValue {
+    canceled: boolean;
+    filePath?: string;
+  }
+
   interface Dialog {
     showMessageBox(options: MessageBoxOptions): Promise<MessageBoxReturnValue>;
     showOpenDialog(options: OpenDialogOptions): Promise<OpenDialogReturnValue>;
+    showSaveDialog(options: SaveDialogOptions): Promise<SaveDialogReturnValue>;
   }
 
   interface Shell {
     openPath(path: string): Promise<string>;
+    trashItem(path: string): Promise<void>;
   }
 
   interface Clipboard {
@@ -158,6 +174,12 @@ declare module "electron" {
     removeListener(channel: string, listener: (_event: unknown, ...args: unknown[]) => void): this;
   }
 
+  interface SafeStorage {
+    isEncryptionAvailable(): boolean;
+    encryptString(plainText: string): Buffer;
+    decryptString(encrypted: Buffer): string;
+  }
+
   export const app: App;
   export const BrowserWindow: BrowserWindowConstructor;
   export const clipboard: Clipboard;
@@ -165,6 +187,7 @@ declare module "electron" {
   export const dialog: Dialog;
   export const ipcMain: IpcMain;
   export const ipcRenderer: IpcRenderer;
+  export const safeStorage: SafeStorage;
   export const shell: Shell;
   export const utilityProcess: UtilityProcessModule;
 }

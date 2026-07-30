@@ -45,8 +45,24 @@ export function resolveRelayAccountBaseUrl(): string {
   return resolveSecureBaseUrl("OXNOVEL_RELAY_ACCOUNT_BASE_URL", "OXNOVEL_RELAY_BASE_URL");
 }
 
-export function resolveRelayModelAlias(): string {
-  return process.env.OXNOVEL_RELAY_MODEL?.trim() || "qwen3.6-plus";
+export type ConsumerRelayModelRole = "planner" | "writer" | "review";
+
+const CONSUMER_RELAY_MODEL_DEFAULTS: Record<ConsumerRelayModelRole, string> = {
+  planner: "deepseek-v4-flash",
+  writer: "qwen3.7-plus",
+  review: "claude-sonnet-4-6",
+};
+
+const CONSUMER_RELAY_MODEL_ENV: Record<ConsumerRelayModelRole, string> = {
+  planner: "OXNOVEL_RELAY_PLANNER_MODEL",
+  writer: "OXNOVEL_RELAY_WRITER_MODEL",
+  review: "OXNOVEL_RELAY_REVIEW_MODEL",
+};
+
+export function resolveRelayModelAlias(role: ConsumerRelayModelRole = "writer"): string {
+  return process.env[CONSUMER_RELAY_MODEL_ENV[role]]?.trim()
+    || process.env.OXNOVEL_RELAY_MODEL?.trim()
+    || CONSUMER_RELAY_MODEL_DEFAULTS[role];
 }
 
 function resolveRelayPath(environmentName: string, fallback: string): string {

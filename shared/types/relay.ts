@@ -68,6 +68,9 @@ export const consumerBalanceSchema = z.object({
 
 export type ConsumerBalance = z.infer<typeof consumerBalanceSchema>;
 
+// Historical recharge and manually adjusted records may not have model request identifiers.
+const relayOptionalRequestIdSchema = z.string().nullish().transform((value) => value ?? "");
+
 export const relayUsageLogItemSchema = z.object({
   id: z.number().int(),
   user_id: z.number().int(),
@@ -80,8 +83,8 @@ export const relayUsageLogItemSchema = z.object({
   quota: z.number(),
   prompt_tokens: z.number().int(),
   completion_tokens: z.number().int(),
-  request_id: z.string(),
-  upstream_request_id: z.string(),
+  request_id: relayOptionalRequestIdSchema,
+  upstream_request_id: relayOptionalRequestIdSchema,
   other: z.string(),
 });
 

@@ -1,5 +1,9 @@
 import type { ConsumerChapterProductionSnapshot } from "@0xnovelagent/shared/types/consumerChapterProduction";
-import type { ConsumerCreditEstimate } from "@0xnovelagent/shared/types/consumerSetup";
+import type { ConsumerSegmentRunSnapshot } from "@0xnovelagent/shared/types/consumerSegmentRun";
+import type {
+  ConsumerCreditEstimate,
+  ConsumerCurrentPhasePlan,
+} from "@0xnovelagent/shared/types/consumerSetup";
 import {
   AlertCircle,
   Check,
@@ -7,21 +11,31 @@ import {
   LoaderCircle,
   MoreHorizontal,
   PenLine,
-  Play,
   RefreshCw,
   WalletCards,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import ConsumerSegmentRunControls from "./segmentRun/ConsumerSegmentRunControls";
 
 interface ConsumerProductionPanelProps {
   production: ConsumerChapterProductionSnapshot | null;
   estimate: ConsumerCreditEstimate | null;
   progress: ConsumerChapterProductionSnapshot[];
+  currentPhase: ConsumerCurrentPhasePlan | null;
+  currentChapterOrder: number;
+  latestChapterOrder: number;
+  availableCredits: number | null;
+  segmentRun: ConsumerSegmentRunSnapshot | null;
+  segmentBusy: boolean;
   busy: boolean;
   saveBlocked: boolean;
   hasContent: boolean;
   onContinueNext: () => void;
+  onOpenLatestChapter: () => void;
+  onStartSegment: () => void;
+  onPauseSegment: () => void;
+  onResumeSegment: () => void;
   onResume: () => void;
   onOpenRevision: (mode: "revise" | "rewrite") => void;
 }
@@ -33,15 +47,78 @@ function stageText(production: ConsumerChapterProductionSnapshot): string {
 }
 
 function costText(production: ConsumerChapterProductionSnapshot): string | null {
-  return production.actualCredits === null
+  return production.actualCredits === null || production.actualCredits <= 0
     ? null
     : `${production.actualCredits.toFixed(3)} 0x积分`;
 }
 
 function chapterTotalText(production: ConsumerChapterProductionSnapshot): string | null {
-  return production.chapterTotalCredits === null
+  return production.chapterTotalCredits === null || production.chapterTotalCredits <= 0
     ? null
     : `${production.chapterTotalCredits.toFixed(3)} 0x积分`;
+}
+
+const tokenNumberFormat = new Intl.NumberFormat("zh-CN");
+
+function tokenText(production: ConsumerChapterProductionSnapshot): string | null {
+  return production.tokenUsage.totalTokens > 0
+    ? `${tokenNumberFormat.format(production.tokenUsage.totalTokens)} Token`
+    : null;
+}
+
+function ChapterUsageSummary({
+  production,
+}: {
+  production: ConsumerChapterProductionSnapshot;
+}) {
+  const usage = production.chapterTokenUsage;
+  const totalCredits = chapterTotalText(production);
+  return (
+    <div className="mt-1 space-y-1 text-xs leading-5">
+      {totalCredits ? (
+        <p>本章累计消耗 {totalCredits}</p>
+      ) : (
+        <p>实际积分正在与中转同步，请以账户消费记录为准。</p>
+      )}
+      {usage.totalTokens > 0 ? (
+        <>
+          <p className="font-medium">
+            本章累计使用 {tokenNumberFormat.format(usage.totalTokens)} Token
+          </p>
+          <p className="text-emerald-900/75">
+            输入 {tokenNumberFormat.format(usage.promptTokens)}
+            {" · "}
+            输出 {tokenNumberFormat.format(usage.completionTokens)}
+            {" · "}
+            {usage.callCount} 次模型调用
+          </p>
+        </>
+      ) : (
+        <p className="text-emerald-900/75">Token 用量正在统计。</p>
+      )}
+      {production.length ? (
+        <p className="font-medium">
+          本章约 {tokenNumberFormat.format(production.length.characterCount)} 字
+          <span className="font-normal text-emerald-900/75">
+            {" · "}
+            建议 {tokenNumberFormat.format(production.length.minimumCharacters)}
+            —
+            {tokenNumberFormat.format(production.length.maximumCharacters)} 字
+          </span>
+        </p>
+      ) : null}
+      {production.qualityWarnings.length > 0 ? (
+        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950">
+          <p className="font-medium">有 {production.qualityWarnings.length} 项表达建议，不影响继续创作</p>
+          {production.qualityWarnings.map((warning) => (
+            <p key={warning.code} className="mt-1 text-amber-900/80">
+              {warning.message}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function EstimateText({ estimate }: { estimate: ConsumerCreditEstimate | null }) {
@@ -93,6 +170,7 @@ function ProgressHistory({ progress }: { progress: ConsumerChapterProductionSnap
                   minute: "2-digit",
                 }).format(new Date(item.updatedAt))}
                 {costText(item) ? ` · ${costText(item)}` : ""}
+                {tokenText(item) ? ` · ${tokenText(item)}` : ""}
               </p>
             </li>
           ))}
@@ -106,15 +184,33 @@ export default function ConsumerProductionPanel({
   production,
   estimate,
   progress,
+  currentPhase,
+  currentChapterOrder,
+  latestChapterOrder,
+  availableCredits,
+  segmentRun,
+  segmentBusy,
   busy,
   saveBlocked,
   hasContent,
   onContinueNext,
+  onOpenLatestChapter,
+  onStartSegment,
+  onPauseSegment,
+  onResumeSegment,
   onResume,
   onOpenRevision,
 }: ConsumerProductionPanelProps) {
   const active = production?.status === "created" || production?.status === "running";
   const recoverable = production?.status === "failed" || production?.status === "outcome_unknown";
+  const segmentVisible = Boolean(
+    segmentRun
+    && ["created", "running", "pausing", "paused", "completed", "failed"].includes(segmentRun.status)
+    && (
+      !["completed", "failed"].includes(segmentRun.status)
+      || currentPhase?.chapterEnd === segmentRun.phaseEndOrder
+    ),
+  );
 
   return (
     <aside className="w-full shrink-0 border-t border-slate-200 bg-slate-50/70 lg:w-80 lg:border-l lg:border-t-0">
@@ -122,7 +218,25 @@ export default function ConsumerProductionPanel({
         <div className="flex-1">
           <h3 className="text-sm font-semibold text-slate-950">下一步</h3>
 
-          {active && production ? (
+          {segmentVisible ? (
+            <div className="mt-5">
+              <ConsumerSegmentRunControls
+                phase={currentPhase}
+                currentChapterOrder={currentChapterOrder}
+                latestChapterOrder={latestChapterOrder}
+                estimate={estimate}
+                availableCredits={availableCredits}
+                run={segmentRun}
+                busy={segmentBusy}
+                disabled={saveBlocked || !hasContent}
+                onWriteNext={onContinueNext}
+                onOpenLatestChapter={onOpenLatestChapter}
+                onStartSegment={onStartSegment}
+                onPause={onPauseSegment}
+                onResume={onResumeSegment}
+              />
+            </div>
+          ) : active && production ? (
             <div className="mt-5" aria-live="polite">
               <LoaderCircle
                 aria-hidden="true"
@@ -132,10 +246,15 @@ export default function ConsumerProductionPanel({
               <p className="mt-2 text-xs leading-5 text-slate-600">
                 收到的正文会持续保存到本机。生成完成后可以直接阅读和修改。
               </p>
+              {production.chapterTokenUsage.totalTokens > 0 ? (
+                <p className="mt-3 text-xs font-medium text-slate-700">
+                  已使用 {tokenNumberFormat.format(production.chapterTokenUsage.totalTokens)} Token
+                </p>
+              ) : null}
             </div>
           ) : null}
 
-          {recoverable && production ? (
+          {!segmentVisible && recoverable && production ? (
             <div className="mt-5">
               <AlertCircle aria-hidden="true" className="size-5 text-amber-800" />
               <p className="mt-3 text-sm font-semibold text-slate-950">
@@ -163,40 +282,35 @@ export default function ConsumerProductionPanel({
             </div>
           ) : null}
 
-          {!active && !recoverable ? (
+          {!segmentVisible && !active && !recoverable ? (
             <div className="mt-5">
               {production?.status === "succeeded" ? (
                 <div className="mb-5 flex gap-3 rounded-lg bg-emerald-50 px-4 py-3 text-emerald-950">
                   <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
                   <div>
                     <p className="text-sm font-medium">本章正文生成完成</p>
-                    {chapterTotalText(production) ? (
-                      <p className="mt-1 text-xs">本章累计消耗 {chapterTotalText(production)}</p>
-                    ) : costText(production) ? (
-                      <p className="mt-1 text-xs">实际消耗 {costText(production)}</p>
-                    ) : null}
+                    <ChapterUsageSummary production={production} />
                   </div>
                 </div>
               ) : null}
-              <p className="text-sm font-medium leading-6 text-slate-950">
-                读完并修改好这一章后，继续生成下一章。
-              </p>
-              <p className="mt-2 text-xs leading-5 text-slate-600">
-                当前正文会先保存为版本，再准备下一章。
-              </p>
+              <ConsumerSegmentRunControls
+                phase={currentPhase}
+                currentChapterOrder={currentChapterOrder}
+                latestChapterOrder={latestChapterOrder}
+                estimate={estimate}
+                availableCredits={availableCredits}
+                run={segmentRun}
+                busy={busy || segmentBusy}
+                disabled={saveBlocked || !hasContent}
+                onWriteNext={onContinueNext}
+                onOpenLatestChapter={onOpenLatestChapter}
+                onStartSegment={onStartSegment}
+                onPause={onPauseSegment}
+                onResume={onResumeSegment}
+              />
               <div className="mt-4">
                 <EstimateText estimate={estimate} />
               </div>
-              <Button
-                className="mt-5 w-full"
-                disabled={busy || saveBlocked || !hasContent}
-                onClick={onContinueNext}
-              >
-                {busy
-                  ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />
-                  : <Play aria-hidden="true" className="size-4" />}
-                {busy ? "正在准备" : "这章可以，继续下一章"}
-              </Button>
               <Button
                 type="button"
                 variant="outline"

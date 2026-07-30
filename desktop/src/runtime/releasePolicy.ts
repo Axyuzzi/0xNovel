@@ -3,13 +3,17 @@ import path from "node:path";
 import { resolveDesktopResourcesDir } from "./paths";
 
 export interface PackagedConsumerReleasePolicy {
-  schemaVersion: 1;
+  schemaVersion: 2;
   productMode: "consumer";
   releaseChannel: string;
   relayBaseUrl: string | null;
   relayAccountBaseUrl: string | null;
+  plannerModel: string;
+  writerModel: string;
+  reviewModel: string;
   allowedRelayOrigins: string[];
-  updateUrl: string | null;
+  packageReleaseBaseUrl: string | null;
+  packageReleaseCode: string | null;
 }
 
 function parseOptionalHttpsUrl(value: unknown, field: string): string | null {
@@ -31,6 +35,28 @@ function parseOptionalHttpsUrl(value: unknown, field: string): string | null {
   return parsed.toString().replace(/\/$/u, "");
 }
 
+function parseModelAlias(value: unknown, field: string): string {
+  if (
+    typeof value !== "string"
+    || !value.trim()
+    || value.trim().length > 128
+    || /\s/u.test(value.trim())
+  ) {
+    throw new Error(`Packaged consumer policy field ${field} is not a valid model alias.`);
+  }
+  return value.trim();
+}
+
+function parsePackageReleaseCode(value: unknown): string | null {
+  if (value == null || value === "") {
+    return null;
+  }
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{32}$/u.test(value)) {
+    throw new Error("Packaged consumer policy field packageReleaseCode is invalid.");
+  }
+  return value;
+}
+
 export function resolvePackagedConsumerReleasePolicy(): PackagedConsumerReleasePolicy {
   const policyPath = path.join(resolveDesktopResourcesDir(), "consumer-release.json");
   if (!fs.existsSync(policyPath)) {
@@ -38,7 +64,7 @@ export function resolvePackagedConsumerReleasePolicy(): PackagedConsumerReleaseP
   }
 
   const parsed = JSON.parse(fs.readFileSync(policyPath, "utf8")) as Record<string, unknown>;
-  if (parsed.schemaVersion !== 1 || parsed.productMode !== "consumer") {
+  if (parsed.schemaVersion !== 2 || parsed.productMode !== "consumer") {
     throw new Error("正式桌面包的产品安全策略无效，已停止启动。");
   }
   const relayBaseUrl = parseOptionalHttpsUrl(parsed.relayBaseUrl, "relayBaseUrl");
@@ -46,7 +72,14 @@ export function resolvePackagedConsumerReleasePolicy(): PackagedConsumerReleaseP
     parsed.relayAccountBaseUrl,
     "relayAccountBaseUrl",
   );
-  const updateUrl = parseOptionalHttpsUrl(parsed.updateUrl, "updateUrl");
+  const packageReleaseBaseUrl = parseOptionalHttpsUrl(
+    parsed.packageReleaseBaseUrl,
+    "packageReleaseBaseUrl",
+  );
+  const packageReleaseCode = parsePackageReleaseCode(parsed.packageReleaseCode);
+  const plannerModel = parseModelAlias(parsed.plannerModel, "plannerModel");
+  const writerModel = parseModelAlias(parsed.writerModel, "writerModel");
+  const reviewModel = parseModelAlias(parsed.reviewModel, "reviewModel");
   if (!Array.isArray(parsed.allowedRelayOrigins)) {
     throw new Error("正式桌面包的中转域名白名单无效。");
   }
@@ -71,14 +104,24 @@ export function resolvePackagedConsumerReleasePolicy(): PackagedConsumerReleaseP
   ) {
     throw new Error("正式桌面包的中转地址与域名白名单不一致。");
   }
+  if (
+    packageReleaseBaseUrl
+    && !allowedRelayOrigins.includes(new URL(packageReleaseBaseUrl).origin)
+  ) {
+    throw new Error("正式桌面包的更新服务地址不在中转域名白名单中。");
+  }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     productMode: "consumer",
     releaseChannel: typeof parsed.releaseChannel === "string" ? parsed.releaseChannel : "beta",
     relayBaseUrl,
     relayAccountBaseUrl,
+    plannerModel,
+    writerModel,
+    reviewModel,
     allowedRelayOrigins,
-    updateUrl,
+    packageReleaseBaseUrl,
+    packageReleaseCode,
   };
 }

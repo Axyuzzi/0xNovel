@@ -4,10 +4,13 @@ import path from "node:path";
 
 const APP_NAME = "0xNovelAgent";
 const PORTABLE_DATA_SUFFIX = "-data";
+const CONSUMER_DATA_DOMAIN = "consumer-v1";
 
 export interface DesktopRuntimeConfig {
   mode: "desktop";
+  productMode: "consumer";
   apiBaseUrl: string;
+  apiSessionToken: string;
   apiTimeoutMs: number;
   isPackaged: boolean;
   appVersion: string;
@@ -37,28 +40,35 @@ export function resolveDesktopAppDataDir(): string {
 
   const portableDataDir = resolvePortableDesktopAppDataDir();
   if (portableDataDir) {
-    return portableDataDir;
+    return path.join(portableDataDir, CONSUMER_DATA_DOMAIN);
   }
 
   const localAppData = process.env.LOCALAPPDATA?.trim();
   if (localAppData) {
-    return path.join(localAppData, APP_NAME);
+    return path.join(localAppData, APP_NAME, CONSUMER_DATA_DOMAIN);
   }
 
   const appData = process.env.APPDATA?.trim();
   if (appData) {
-    return path.join(appData, APP_NAME);
+    return path.join(appData, APP_NAME, CONSUMER_DATA_DOMAIN);
   }
 
   if (process.platform === "darwin") {
-    return path.join(os.homedir(), "Library", "Application Support", APP_NAME);
+    return path.join(os.homedir(), "Library", "Application Support", APP_NAME, CONSUMER_DATA_DOMAIN);
   }
 
-  return path.join(os.homedir(), `.${APP_NAME}`);
+  return path.join(os.homedir(), `.${APP_NAME}`, CONSUMER_DATA_DOMAIN);
 }
 
 export function resolveDesktopLogsDir(): string {
   return path.join(resolveDesktopAppDataDir(), "logs");
+}
+
+export function resolveDesktopProfileDataDir(profileId: string): string {
+  if (!/^[a-f0-9]{32}$/.test(profileId)) {
+    throw new Error("本地作品资料域无效。");
+  }
+  return path.join(resolveDesktopAppDataDir(), "profiles", profileId);
 }
 
 export function resolveDesktopMainLogFile(): string {
@@ -70,15 +80,29 @@ export function resolveDesktopUpdateChannel(): string {
   return configuredChannel || "beta";
 }
 
+export function resolveDesktopBuildNumber(): number {
+  const packagePath = path.resolve(__dirname, "..", "..", "package.json");
+  const parsed = JSON.parse(fs.readFileSync(packagePath, "utf8")) as {
+    buildNumber?: unknown;
+  };
+  if (!Number.isInteger(parsed.buildNumber) || Number(parsed.buildNumber) <= 0) {
+    throw new Error("桌面安装包缺少有效构建号。");
+  }
+  return Number(parsed.buildNumber);
+}
+
 export function resolveDesktopRuntimeConfig(options: {
   port: number;
   isPackaged: boolean;
   appVersion: string;
+  apiSessionToken: string;
   updateChannel?: string;
 }): DesktopRuntimeConfig {
   return {
     mode: "desktop",
+    productMode: "consumer",
     apiBaseUrl: `http://127.0.0.1:${options.port}/api`,
+    apiSessionToken: options.apiSessionToken,
     apiTimeoutMs: 10 * 60 * 1000,
     isPackaged: options.isPackaged,
     appVersion: options.appVersion,

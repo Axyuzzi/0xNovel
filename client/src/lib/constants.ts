@@ -1,5 +1,6 @@
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 type AppRuntimeMode = "web" | "desktop";
+type AppProductMode = "legacy" | "consumer";
 type ViteRuntimeEnv = Partial<ImportMetaEnv> & {
   DEV?: boolean;
   VITE_API_BASE_URL?: string;
@@ -10,7 +11,9 @@ type BrowserLocation = Pick<Location, "protocol" | "hostname" | "origin">;
 
 interface ClientRuntimeConfig {
   mode?: AppRuntimeMode;
+  productMode?: AppProductMode;
   apiBaseUrl?: string;
+  apiSessionToken?: string;
   apiTimeoutMs?: number | string;
   isPackaged?: boolean;
   appVersion?: string;
@@ -42,11 +45,16 @@ function resolveAppRuntime(config: ClientRuntimeConfig): AppRuntimeMode {
   return config.mode === "desktop" ? "desktop" : "web";
 }
 
+function resolveProductMode(config: ClientRuntimeConfig): AppProductMode {
+  return config.productMode === "consumer" ? "consumer" : "legacy";
+}
+
 const runtimeConfig = resolveRuntimeConfig();
 const viteEnv = resolveViteEnv();
 const viteAppVersion = import.meta.env.VITE_APP_VERSION;
 
 export const APP_RUNTIME: AppRuntimeMode = resolveAppRuntime(runtimeConfig);
+export const APP_PRODUCT_MODE: AppProductMode = resolveProductMode(runtimeConfig);
 export const APP_RUNTIME_IS_PACKAGED = runtimeConfig.isPackaged === true;
 export const APP_VERSION = runtimeConfig.appVersion?.trim() || viteAppVersion?.trim() || "0.0.0";
 export const APP_RUNTIME_IS_PORTABLE = runtimeConfig.isPortable === true;
@@ -110,6 +118,7 @@ function resolveApiBaseUrl(): string {
 
 // 开发环境优先把 API 指向当前页面所在主机，避免局域网访问时仍被锁到 localhost。
 export const API_BASE_URL = resolveApiBaseUrl();
+export const API_SESSION_TOKEN = runtimeConfig.apiSessionToken?.trim() || "";
 
 const DEFAULT_API_TIMEOUT_MS = 10 * 60 * 1000;
 

@@ -7,8 +7,7 @@ import { queryKeys } from "@/api/queryKeys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { APP_RUNTIME, APP_RUNTIME_IS_PACKAGED } from "@/lib/constants";
-import DesktopLegacyDataImportCard from "./DesktopLegacyDataImportCard";
+import { APP_PRODUCT_MODE, APP_RUNTIME, APP_RUNTIME_IS_PACKAGED } from "@/lib/constants";
 
 function hasUsableDesktopProviderConfig(providerConfigs: APIKeyStatus[]): boolean {
   return providerConfigs.some((item) => item.isConfigured && item.isActive && item.currentModel.trim().length > 0);
@@ -16,7 +15,10 @@ function hasUsableDesktopProviderConfig(providerConfigs: APIKeyStatus[]): boolea
 
 export default function DesktopModelSetupGate() {
   const location = useLocation();
-  const shouldCheckDesktopSetup = APP_RUNTIME === "desktop" && APP_RUNTIME_IS_PACKAGED;
+  const shouldCheckDesktopSetup =
+    APP_PRODUCT_MODE !== "consumer"
+    && APP_RUNTIME === "desktop"
+    && APP_RUNTIME_IS_PACKAGED;
   const settingsQuery = useQuery({
     queryKey: queryKeys.settings.apiKeys,
     queryFn: getAPIKeySettings,
@@ -60,7 +62,6 @@ export default function DesktopModelSetupGate() {
           <p>
             Current usable providers: {configuredProviderCount}
           </p>
-          <DesktopLegacyDataImportCard />
         </CardContent>
       </Card>
     );
@@ -83,7 +84,6 @@ export default function DesktopModelSetupGate() {
           <div className="rounded-md border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
             Open the existing settings page, fill in an API key or local endpoint, choose a default model, and save it.
           </div>
-          <DesktopLegacyDataImportCard />
           <div className="flex flex-wrap gap-3">
             <Button asChild size="lg">
               <Link to="/settings">Open model settings</Link>

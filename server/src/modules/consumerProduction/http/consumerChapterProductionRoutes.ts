@@ -15,6 +15,9 @@ import {
   consumerStartStoryReviewRequestSchema,
   consumerStoryReviewOperationKindSchema,
 } from "@0xnovelagent/shared/types/consumerStoryReview";
+import {
+  consumerStartSegmentRunRequestSchema,
+} from "@0xnovelagent/shared/types/consumerSegmentRun";
 import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "../../../middleware/errorHandler";
@@ -23,6 +26,7 @@ import { relayCredentialStore } from "../../../relay/auth/RelayCredentialStore";
 import {
   consumerChapterProductionService,
   consumerChapterRevisionService,
+  consumerSegmentRunService,
   consumerStoryReviewService,
 } from "../application/chapterProductionServiceInstance";
 
@@ -42,6 +46,10 @@ const operationParamsSchema = novelParamsSchema.extend({
 
 const planningVersionParamsSchema = novelParamsSchema.extend({
   versionId: z.string().trim().min(1).max(128),
+});
+
+const segmentRunParamsSchema = novelParamsSchema.extend({
+  runId: z.string().trim().min(1).max(128),
 });
 
 function routeParam(value: string | string[] | undefined): string {
@@ -75,6 +83,15 @@ function executeStoryReviewInBackground(operationId: string): void {
   });
 }
 
+function executeSegmentRunInBackground(runId: string): void {
+  void consumerSegmentRunService.execute(runId).catch((error) => {
+    console.error("[consumer-segment-run] background execution failed", {
+      runId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  });
+}
+
 router.use((_req, _res, next) => {
   if (!relayCredentialStore.getUser()) {
     next(new AppError("登录后才能继续生成章节。", 401));
@@ -88,7 +105,9 @@ router.use((_req, _res, next) => {
 // 即使这里失败也不应阻断换账号，只是那些操作会在下次启动时由 reconcileOperation 兜底。
 router.post("/operations/drain", async (_req, res, next) => {
   try {
-    const result = await consumerChapterProductionService.drainInFlightOperations();
+    const segmentRuns = await consumerSegmentRunService.pauseInFlightRuns();
+    const operations = await consumerChapterProductionService.drainInFlightOperations();
+    const result = { ...operations, ...segmentRuns };
     res.status(200).json({
       success: true,
       data: result,
@@ -97,6 +116,104 @@ router.post("/operations/drain", async (_req, res, next) => {
     next(error);
   }
 });
+
+router.post(
+  "/novels/:novelId/segment-runs",
+  validate({
+    params: novelParamsSchema,
+    body: consumerStartSegmentRunRequestSchema,
+  }),
+  async (req, res, next) => {
+    try {
+      const started = await consumerSegmentRunService.start(
+        routeParam(req.params.novelId),
+        req.body,
+      );
+      if (started.shouldExecute) executeSegmentRunInBackground(started.snapshot.id);
+      res.status(202).json({
+        success: true,
+        data: started.snapshot,
+        message: "正在按当前规划写完这一段。",
+      } satisfies ApiResponse<typeof started.snapshot>);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.get(
+  "/novels/:novelId/segment-runs/latest",
+  validate({ params: novelParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const data = await consumerSegmentRunService.getLatest(
+        routeParam(req.params.novelId),
+      );
+      res.status(200).json({ success: true, data } satisfies ApiResponse<typeof data>);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.get(
+  "/novels/:novelId/segment-runs/:runId",
+  validate({ params: segmentRunParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const data = await consumerSegmentRunService.get(
+        routeParam(req.params.novelId),
+        routeParam(req.params.runId),
+      );
+      res.status(200).json({ success: true, data } satisfies ApiResponse<typeof data>);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/novels/:novelId/segment-runs/:runId/pause",
+  validate({ params: segmentRunParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const data = await consumerSegmentRunService.requestPause(
+        routeParam(req.params.novelId),
+        routeParam(req.params.runId),
+      );
+      res.status(200).json({
+        success: true,
+        data,
+        message: data.status === "pausing"
+          ? "会在当前章节写完后暂停。"
+          : "连续创作已暂停。",
+      } satisfies ApiResponse<typeof data>);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/novels/:novelId/segment-runs/:runId/resume",
+  validate({ params: segmentRunParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const started = await consumerSegmentRunService.resume(
+        routeParam(req.params.novelId),
+        routeParam(req.params.runId),
+      );
+      if (started.shouldExecute) executeSegmentRunInBackground(started.snapshot.id);
+      res.status(202).json({
+        success: true,
+        data: started.snapshot,
+        message: "正在从暂停位置继续这一段。",
+      } satisfies ApiResponse<typeof started.snapshot>);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 router.post(
   "/novels/:novelId/chapters/:chapterId/next",

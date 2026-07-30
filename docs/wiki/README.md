@@ -6,6 +6,7 @@ Wiki 不记录单次提交改了什么，也不替代 release notes。它只记�
 
 ## 使用方式
 
+- 当前 C 端 SaaS 改造只使用 [本地 C 端 SaaS 完整改造与执行方案](./architecture/local-exe-saas-rebuild-plan.md) 作为产品、架构、排期和验收总入口。
 - 先从本页找到相关主题，再进入对应分类页面。
 - 如果页面内容来自历史计划、设计文档或检查点，保留来源链接，不搬空原文档。
 - 如果一次开发澄清了长期规则，应更新对应 Wiki；如果只是小改动或发布流水账，不写 Wiki。
@@ -15,6 +16,7 @@ Wiki 不记录单次提交改了什么，也不替代 release notes。它只记�
 
 ### Architecture
 
+- [本地 C 端 SaaS 完整改造与执行方案（唯一执行文档）](./architecture/local-exe-saas-rebuild-plan.md)
 - [模块边界与文档治理](./architecture/module-boundaries.md)
 - [当前模型选择与厂商默认模型边界](./architecture/model-selection.md)
 - [配置项归属与可见性规范](./architecture/configuration-conventions.md)

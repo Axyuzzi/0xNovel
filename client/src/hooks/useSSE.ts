@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SSEFrame } from "@0xnovelagent/shared/types/api";
 import type { ChapterRuntimePackage } from "@0xnovelagent/shared/types/chapterRuntime";
 import { API_BASE_URL } from "@/lib/constants";
+import { createApiRequestHeaders } from "@/api/requestHeaders";
 
 interface UseSSEOptions {
   headers?: Record<string, string>;
@@ -107,10 +108,10 @@ export function useSSE(options?: UseSSEOptions) {
       try {
         const response = await fetch(url.startsWith("http") ? url : `${API_BASE_URL}${url}`, {
           method: "POST",
-          headers: {
+          headers: createApiRequestHeaders({
             "Content-Type": "application/json",
             ...(options?.headers ?? {}),
-          },
+          }),
           body: JSON.stringify(body ?? {}),
           signal: controller.signal,
         });

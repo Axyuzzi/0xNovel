@@ -5,6 +5,7 @@ import {
   resolveDesktopLogRetentionConfig,
   rotateDesktopLogFileIfNeeded,
 } from "./logRetention";
+import { redactDesktopLogMessage } from "./logRedaction";
 
 type DesktopLogLevel = "info" | "warn" | "error";
 
@@ -13,7 +14,7 @@ function ensureDesktopLogsDir(): void {
 }
 
 function normalizeLogMessage(message: string): string {
-  return message.replace(/\r?\n+$/g, "");
+  return redactDesktopLogMessage(message).replace(/\r?\n+$/g, "");
 }
 
 function formatLogLine(level: DesktopLogLevel, source: string, message: string): string {

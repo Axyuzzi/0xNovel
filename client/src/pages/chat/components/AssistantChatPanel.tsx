@@ -13,6 +13,7 @@ import type { SSEFrame } from "@0xnovelagent/shared/types/api";
 import type { ChatMessage } from "@/store/chatStore";
 import MarkdownViewer from "@/components/common/MarkdownViewer";
 import { API_BASE_URL } from "@/lib/constants";
+import { createApiRequestHeaders } from "@/api/requestHeaders";
 
 type ChatMode = "standard" | "agent";
 type ContextMode = "global" | "novel";
@@ -211,9 +212,9 @@ export default function AssistantChatPanel({
 
           const response = await fetch(`${API_BASE_URL}/chat`, {
             method: "POST",
-            headers: {
+            headers: createApiRequestHeaders({
               "Content-Type": "application/json",
-            },
+            }),
             body: JSON.stringify({
               messages: payloadMessages,
               systemPrompt: systemPrompt || undefined,

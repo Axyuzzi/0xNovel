@@ -40,6 +40,27 @@ body {
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 }
 
+@keyframes desktop-bootstrap-progress {
+  from {
+    transform: translateX(-110%);
+  }
+
+  to {
+    transform: translateX(210%);
+  }
+}
+
+.desktop-bootstrap-progress {
+  animation: desktop-bootstrap-progress 1.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-bootstrap-progress {
+    animation: none;
+    transform: translateX(50%);
+  }
+}
+
 @media (min-width: 768px) {
   html,
   body,

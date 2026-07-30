@@ -10,6 +10,58 @@ export interface PromptAssetLoaderEntry {
 
 export const promptAssetLoaderEntries: PromptAssetLoaderEntry[] = [
   {
+    key: "consumer.story.review@v2",
+    load: () => require("../prompts/consumer/consumerStoryReview.prompts").consumerStoryReviewPrompt as UnknownPromptAsset,
+  },
+  {
+    key: "consumer.story.adjust@v2",
+    load: () => require("../prompts/consumer/consumerStoryReview.prompts").consumerStoryAdjustmentPrompt as UnknownPromptAsset,
+  },
+  {
+    key: "consumer.story.transition@v2",
+    load: () => require("../prompts/consumer/consumerStoryReview.prompts").consumerStoryTransitionPrompt as UnknownPromptAsset,
+  },
+  {
+    key: "consumer.chapter.revise@v4",
+    load: () => require("../prompts/consumer/consumerChapterRevision.prompts").consumerChapterRevisePrompt as UnknownPromptAsset,
+  },
+  {
+    key: "consumer.chapter.rewrite@v4",
+    load: () => require("../prompts/consumer/consumerChapterRevision.prompts").consumerChapterRewritePrompt as UnknownPromptAsset,
+  },
+  {
+    key: "consumer.chapter.task@v4",
+    load: () => require("../prompts/consumer/consumerChapterProduction.prompts").consumerNextChapterTaskPrompt as UnknownPromptAsset,
+  },
+  {
+    key: "consumer.chapter.write@v3",
+    load: () => require("../prompts/consumer/consumerChapterProduction.prompts").consumerChapterWritePrompt as UnknownPromptAsset,
+  },
+  {
+    key: "consumer.chapter.continue@v3",
+    load: () => require("../prompts/consumer/consumerChapterProduction.prompts").consumerChapterContinuePrompt as UnknownPromptAsset,
+  },
+  {
+    key: "consumer.setup.story_direction@v3",
+    load: () => require("../prompts/consumer/consumerSetup.prompts").consumerStoryDirectionPrompt as UnknownPromptAsset,
+  },
+  {
+    key: "consumer.setup.book_skeleton@v2",
+    load: () => require("../prompts/consumer/consumerSetup.prompts").consumerBookSkeletonPrompt as UnknownPromptAsset,
+  },
+  {
+    key: "consumer.setup.volume_plan@v3",
+    load: () => require("../prompts/consumer/consumerSetup.prompts").consumerVolumePlanPrompt as UnknownPromptAsset,
+  },
+  {
+    key: "consumer.setup.current_phase@v2",
+    load: () => require("../prompts/consumer/consumerSetup.prompts").consumerCurrentPhasePrompt as UnknownPromptAsset,
+  },
+  {
+    key: "consumer.setup.first_chapter@v5",
+    load: () => require("../prompts/consumer/consumerSetup.prompts").consumerFirstChapterPrompt as UnknownPromptAsset,
+  },
+  {
     key: "planner.intent.parse@v1",
     load: () => require("../prompts/agent/plannerIntent.prompt").plannerIntentPrompt as UnknownPromptAsset,
   },

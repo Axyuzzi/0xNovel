@@ -9,6 +9,8 @@ import { APP_RUNTIME } from "./lib/constants";
 import AppRouter from "./router";
 import { Toaster } from "./components/ui/toast";
 import "./index.css";
+import ConsumerAuthBoundary from "./features/consumerAuth/ConsumerAuthBoundary";
+import { ConsumerSessionProvider } from "./features/consumerAuth/ConsumerSessionContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,7 +29,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <AppRouterProvider>
         <DesktopBootstrapBoundary>
           <ServerStartupGate>
-            <AppRouter />
+            <ConsumerSessionProvider>
+              <ConsumerAuthBoundary>
+                <AppRouter />
+              </ConsumerAuthBoundary>
+            </ConsumerSessionProvider>
           </ServerStartupGate>
         </DesktopBootstrapBoundary>
         <Toaster />

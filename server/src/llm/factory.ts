@@ -3,6 +3,8 @@ import type { ModelRouteRequestProtocol } from "@0xnovelagent/shared/types/novel
 import { ChatOpenAI } from "@langchain/openai";
 import type { PromptInvocationMeta } from "../prompting/core/promptTypes";
 import { secretStore } from "../services/settings/secretStore";
+import { isConsumerProductMode } from "../config/productMode";
+import { resolveConsumerRelayPolicy } from "../relay/llm/consumerRelayPolicy";
 import { resolveModelTemperature } from "./capabilities";
 import { createAnthropicLLM } from "./anthropicClient";
 import { attachLLMDebugLogging } from "./debugLogging";
@@ -151,6 +153,11 @@ function toProviderSecret(item: {
 }
 
 export async function loadProviderApiKeys(): Promise<void> {
+  if (isConsumerProductMode()) {
+    providerSecrets.clear();
+    return;
+  }
+
   try {
     const keys = await secretStore.listProviders({ onlyActive: true });
     providerSecrets.clear();
@@ -166,6 +173,11 @@ export async function loadProviderApiKeys(): Promise<void> {
 }
 
 export function setProviderSecretCache(provider: LLMProvider, secret: ProviderSecret | null): void {
+  if (isConsumerProductMode()) {
+    providerSecrets.clear();
+    return;
+  }
+
   if (!secret) {
     providerSecrets.delete(provider);
     return;
@@ -241,13 +253,32 @@ export async function resolveLLMClientOptions(
     resolvedRouteDegraded = route.routeDegraded;
   }
 
-  const dbSecret = await resolveProviderSecret(resolvedProvider);
-  const providerName = isBuiltInProvider(resolvedProvider)
+  const consumerMode = isConsumerProductMode();
+  const consumerRelayPolicy = consumerMode
+    ? resolveConsumerRelayPolicy({
+      promptId: options.promptMeta?.promptId,
+      taskType: options.taskType,
+    })
+    : null;
+  if (consumerRelayPolicy) {
+    resolvedProvider = consumerRelayPolicy.provider;
+    resolvedModel = consumerRelayPolicy.model;
+    resolvedModelRoute = consumerRelayPolicy.modelRoute;
+    resolvedRouteDegraded = false;
+    options.requestProtocol = consumerRelayPolicy.requestProtocol;
+  }
+
+  const dbSecret = consumerMode ? undefined : await resolveProviderSecret(resolvedProvider);
+  const providerName = consumerRelayPolicy
+    ? consumerRelayPolicy.providerName
+    : isBuiltInProvider(resolvedProvider)
     ? PROVIDERS[resolvedProvider].name
     : dbSecret?.displayName ?? resolvedProvider;
-  const apiKey = normalizeOptionalText(options.apiKey)
-    ?? dbSecret?.key
-    ?? getProviderEnvApiKey(resolvedProvider);
+  const apiKey = consumerRelayPolicy
+    ? consumerRelayPolicy.apiKey
+    : normalizeOptionalText(options.apiKey)
+      ?? dbSecret?.key
+      ?? getProviderEnvApiKey(resolvedProvider);
 
   if (!apiKey && providerRequiresApiKey(resolvedProvider)) {
     throw new Error(`未配置 ${providerName} 的 API Key。`);
@@ -261,11 +292,13 @@ export async function resolveLLMClientOptions(
     throw new Error(`未配置 ${providerName} 的默认模型。`);
   }
 
-  const baseURL = resolveProviderBaseUrl(
-    resolvedProvider,
-    options.baseURL ?? dbSecret?.baseURL,
-    dbSecret?.baseURL,
-  );
+  const baseURL = consumerRelayPolicy
+    ? consumerRelayPolicy.baseURL
+    : resolveProviderBaseUrl(
+      resolvedProvider,
+      options.baseURL ?? dbSecret?.baseURL,
+      dbSecret?.baseURL,
+    );
   if (!baseURL) {
     throw new Error(`未配置 ${providerName} 的 API URL。`);
   }

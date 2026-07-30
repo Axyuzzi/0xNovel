@@ -1,5 +1,4 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import DesktopLegacyDataImportCard from "@/components/layout/DesktopLegacyDataImportCard";
 import DesktopUpdateCard from "@/components/layout/DesktopUpdateCard";
 import { APP_RUNTIME } from "@/lib/constants";
 import { AUTO_DIRECTOR_MOBILE_CLASSES } from "@/mobile/autoDirector";
@@ -24,7 +23,7 @@ export default function SettingsMaintenanceSection() {
         <CardHeader>
           <CardTitle>系统维护</CardTitle>
           <CardDescription className={AUTO_DIRECTOR_MOBILE_CLASSES.wrapText}>
-            检查桌面更新或导入本机旧数据；这些操作不会影响当前创作配置。
+            检查桌面更新，并在需要时获取诊断信息。
           </CardDescription>
         </CardHeader>
         <CardContent className={`text-sm text-muted-foreground ${AUTO_DIRECTOR_MOBILE_CLASSES.wrapText}`}>
@@ -32,7 +31,6 @@ export default function SettingsMaintenanceSection() {
         </CardContent>
       </Card>
       <DesktopUpdateCard />
-      <DesktopLegacyDataImportCard compact />
     </div>
   );
 }

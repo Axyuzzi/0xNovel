@@ -5,6 +5,7 @@ import type {
   LlmLiveStreamFrame,
 } from "@0xnovelagent/shared/types/llmLive";
 import { API_BASE_URL } from "@/lib/constants";
+import { createApiRequestHeaders } from "@/api/requestHeaders";
 
 const MAX_PREVIEW_CHARS = 16_000;
 
@@ -145,7 +146,10 @@ export function useLlmLiveFeed(input: {
           : API_BASE_URL + "/llm-live/stream";
         const response = await fetch(
           streamUrl,
-          { signal: controller.signal },
+          {
+            headers: createApiRequestHeaders(),
+            signal: controller.signal,
+          },
         );
         if (!response.ok || !response.body) {
           throw new Error("生成实况连接失败");

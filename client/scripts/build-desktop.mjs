@@ -6,6 +6,7 @@ const result = spawnSync("vite", ["build"], {
   env: {
     ...process.env,
     AI_NOVEL_CLIENT_BASE: "relative",
+    OXNOVEL_CONSUMER_ONLY_BUILD: "true",
   },
 });
 

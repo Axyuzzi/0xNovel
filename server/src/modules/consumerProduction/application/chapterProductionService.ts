@@ -2,16 +2,14 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   consumerChapterProductionStageSchema,
   consumerChapterProductionStatusSchema,
-  consumerChapterWritingTaskSchema,
   type ConsumerChapterProductionSnapshot,
-  type ConsumerChapterWritingTask,
   type ConsumerResumeChapterRequest,
   type ConsumerStartNextChapterRequest,
 } from "@0xnovelagent/shared/types/consumerChapterProduction";
 import {
   consumerBookSkeletonSchema,
   consumerCurrentPhasePlanSchema,
-  consumerStoryDirectionSchema,
+  consumerStoredStoryDirectionSchema,
   consumerVolumePlanSchema,
   type ConsumerCreditEstimate,
 } from "@0xnovelagent/shared/types/consumerSetup";
@@ -21,17 +19,21 @@ import type {
   Prisma,
   PrismaClient,
 } from "@prisma/client";
+import type { LlmTokenUsageSnapshot } from "../../../llm/usageTracking";
 import { AppError } from "../../../middleware/errorHandler";
 import type { ConsumerChapterProductionPromptInput } from "../../../prompting/prompts/consumer/consumerChapterProduction.prompts";
+import {
+  inspectConsumerProse,
+  normalizeConsumerChapterTask,
+} from "../../../prompting/prompts/consumer/consumerProsePolicy";
 import type { ConsumerChapterProductionCreditMeter } from "./chapterProductionCreditMeter";
 import type { ConsumerChapterProductionGenerator } from "./chapterProductionGenerator";
+import {
+  parseProductionPayload,
+  type ProductionPayload,
+} from "./chapterProductionPayload";
+import { ChapterProductionUsageStore } from "./chapterProductionUsageStore";
 import { StreamingDraftWriter } from "./streamingDraftWriter";
-
-interface ProductionPayload {
-  mode: "next_chapter" | "continue_chapter";
-  sourceChapterId: string;
-  task: ConsumerChapterWritingTask | null;
-}
 
 export interface StartedChapterProduction {
   snapshot: ConsumerChapterProductionSnapshot;
@@ -51,23 +53,6 @@ function parseJson(value: string | null, label: string): unknown {
   }
 }
 
-function parsePayload(operation: ConsumerCreationOperation): ProductionPayload {
-  const raw = parseJson(operation.inputJson, "章节生成记录");
-  if (!raw || typeof raw !== "object") {
-    throw new AppError("章节生成记录缺少必要信息。", 500);
-  }
-  const record = raw as Record<string, unknown>;
-  const mode = record.mode === "continue_chapter" ? "continue_chapter" : "next_chapter";
-  if (typeof record.sourceChapterId !== "string" || !record.sourceChapterId) {
-    throw new AppError("章节生成记录缺少来源章节。", 500);
-  }
-  return {
-    mode,
-    sourceChapterId: record.sourceChapterId,
-    task: record.task ? consumerChapterWritingTaskSchema.parse(record.task) : null,
-  };
-}
-
 function safeError(error: unknown): string {
   if (error instanceof Error && error.message.trim()) {
     return error.message.slice(0, 500);
@@ -75,18 +60,17 @@ function safeError(error: unknown): string {
   return "章节没有生成完成。";
 }
 
-function measuredCredits(before: number | null, after: number | null): number | null {
-  if (before === null || after === null) return null;
-  return Math.max(0, Math.round((before - after) * 1_000));
-}
-
 export class ConsumerChapterProductionService {
+  private readonly usageStore: ChapterProductionUsageStore;
+
   constructor(
     private readonly db: PrismaClient,
     private readonly generator: ConsumerChapterProductionGenerator,
     private readonly creditMeter: ConsumerChapterProductionCreditMeter,
     private readonly serviceStartedAt = new Date(),
-  ) {}
+  ) {
+    this.usageStore = new ChapterProductionUsageStore(db, creditMeter);
+  }
 
   async startNextChapter(
     novelId: string,
@@ -103,7 +87,7 @@ export class ConsumerChapterProductionService {
         shouldExecute: false,
       };
     }
-    const estimate = await this.getCreditEstimate("consumer_next_chapter");
+    const estimate = await this.usageStore.getCreditEstimate("consumer_next_chapter");
     const operationId = randomUUID();
     await this.db.$transaction(async (tx) => {
       const setup = await tx.consumerStorySetup.findUnique({ where: { novelId } });
@@ -205,6 +189,8 @@ export class ConsumerChapterProductionService {
             mode: "next_chapter",
             sourceChapterId,
             task: null,
+            length: null,
+            qualityWarnings: [],
           } satisfies ProductionPayload),
           estimatedCreditsMilli: estimate
             ? Math.round(estimate.typical * 1_000)
@@ -249,7 +235,7 @@ export class ConsumerChapterProductionService {
     if (!["failed", "outcome_unknown"].includes(reconciled.status)) {
       throw new AppError("当前章节不需要恢复生成。", 409);
     }
-    const previousPayload = parsePayload(reconciled);
+    const previousPayload = parseProductionPayload(reconciled);
     const draft = await this.db.consumerChapterDraft.findUnique({ where: { chapterId } });
     if (!draft || draft.revision !== input.expectedRevision) {
       throw new AppError("正文有新的修改，请确认最新内容后再继续。", 409);
@@ -258,7 +244,7 @@ export class ConsumerChapterProductionService {
     const kind = mode === "continue_chapter"
       ? "consumer_continue_chapter"
       : "consumer_next_chapter";
-    const estimate = await this.getCreditEstimate(kind);
+    const estimate = await this.usageStore.getCreditEstimate(kind);
     const operation = await this.db.consumerCreationOperation.create({
       data: {
         id: randomUUID(),
@@ -272,6 +258,8 @@ export class ConsumerChapterProductionService {
           mode,
           sourceChapterId: previousPayload.sourceChapterId,
           task: previousPayload.task,
+          length: null,
+          qualityWarnings: [],
         } satisfies ProductionPayload),
         receivedContent: draft.content,
         estimatedCreditsMilli: estimate
@@ -325,7 +313,7 @@ export class ConsumerChapterProductionService {
   }
 
   async getNextChapterEstimate(): Promise<ConsumerCreditEstimate | null> {
-    return this.getCreditEstimate("consumer_next_chapter");
+    return this.usageStore.getCreditEstimate("consumer_next_chapter");
   }
 
   async executeOperation(operationId: string): Promise<ConsumerChapterProductionSnapshot> {
@@ -348,14 +336,19 @@ export class ConsumerChapterProductionService {
       return this.serializeOperation(await this.reconcileOperation(operation));
     }
 
-    const beforeCredits = await this.creditMeter.readAvailableCredits();
+    const creditStart = await this.usageStore.captureCreditStart();
     let writer: StreamingDraftWriter | null = null;
+    const recordUsage = (usage: LlmTokenUsageSnapshot) => (
+      this.usageStore.recordOperationUsage(operation.id, usage)
+    );
     try {
-      const payload = parsePayload(operation);
+      const payload = parseProductionPayload(operation);
       const context = await this.buildPromptInput(operation, payload);
       let task = payload.task;
       if (!task) {
-        task = await this.generator.createTask(context, operation.id);
+        task = normalizeConsumerChapterTask(
+          await this.generator.createTask(context, operation.id, recordUsage),
+        );
         await this.db.$transaction(async (tx) => {
           await tx.chapter.update({
             where: { id: operation.chapterId ?? "" },
@@ -398,25 +391,34 @@ export class ConsumerChapterProductionService {
             promptInput,
             operation.id,
             (delta) => writer!.append(delta),
+            recordUsage,
           )
         : await this.generator.writeChapter(
             promptInput,
             operation.id,
             (delta) => writer!.append(delta),
+            recordUsage,
           );
       await writer.flush();
       const finalContent = continuing
         ? `${draft.content.trimEnd()}\n\n${generated.trim()}`
         : generated.trim();
+      const proseInspection = inspectConsumerProse(finalContent);
       await writer.finish(finalContent);
-      const afterCredits = await this.creditMeter.readAvailableCredits();
+      const actualCreditsMilli = await this.usageStore.readActualCreditsMilli(creditStart);
       await this.db.consumerCreationOperation.update({
         where: { id: operation.id },
         data: {
           status: "succeeded",
           stage: "completed",
+          inputJson: JSON.stringify({
+            ...payload,
+            task,
+            length: proseInspection.length,
+            qualityWarnings: proseInspection.warnings,
+          } satisfies ProductionPayload),
           receivedContent: finalContent,
-          actualCreditsMilli: measuredCredits(beforeCredits, afterCredits),
+          actualCreditsMilli,
           resultRefType: "chapter_draft",
           resultRefId: draft.id,
           finishedAt: new Date(),
@@ -424,12 +426,12 @@ export class ConsumerChapterProductionService {
       });
     } catch (error) {
       await writer?.flush().catch(() => undefined);
-      const afterCredits = await this.creditMeter.readAvailableCredits();
+      const actualCreditsMilli = await this.usageStore.readActualCreditsMilli(creditStart);
       await this.db.consumerCreationOperation.updateMany({
         where: { id: operation.id, status: "running" },
         data: {
           status: "failed",
-          actualCreditsMilli: measuredCredits(beforeCredits, afterCredits),
+          actualCreditsMilli,
           errorCode: "generation_failed",
           errorMessage: safeError(error),
           finishedAt: new Date(),
@@ -471,7 +473,7 @@ export class ConsumerChapterProductionService {
     if (
       duplicate
       && expectation.sourceChapterId
-      && parsePayload(duplicate).sourceChapterId !== expectation.sourceChapterId
+      && parseProductionPayload(duplicate).sourceChapterId !== expectation.sourceChapterId
     ) {
       throw new AppError("本次操作标识已被其他章节使用。", 409);
     }
@@ -602,7 +604,7 @@ export class ConsumerChapterProductionService {
   }
 
   private parseSetupContext(setup: ConsumerStorySetup) {
-    const selectedDirection = consumerStoryDirectionSchema.parse(
+    const selectedDirection = consumerStoredStoryDirectionSchema.parse(
       parseJson(setup.selectedDirectionJson, "故事方向"),
     );
     const bookSkeleton = consumerBookSkeletonSchema.parse(
@@ -646,54 +648,14 @@ export class ConsumerChapterProductionService {
     });
   }
 
-  private async getCreditEstimate(kind: string): Promise<ConsumerCreditEstimate | null> {
-    const history = await this.db.consumerCreationOperation.findMany({
-      where: {
-        kind,
-        status: "succeeded",
-        actualCreditsMilli: { not: null },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      select: { actualCreditsMilli: true },
-    });
-    const values = history
-      .map((item) => item.actualCreditsMilli)
-      .filter((value): value is number => value !== null)
-      .map((value) => value / 1_000);
-    if (!values.length) return null;
-    return {
-      typical: values.reduce((sum, value) => sum + value, 0) / values.length,
-      minimum: Math.min(...values),
-      maximum: Math.max(...values),
-      sampleSize: values.length,
-    };
-  }
-
-  /**
-   * 汇总某一章所有创作操作（任务+正文+续写）的累计消费，转成 0x积分。
-   * 用于在工作台展示“本章一共花了多少”，而不是只看最近一次操作。
-   * 只统计已经计费完成（actualCreditsMilli 非空）的操作；没有任何已计费操作时返回 null。
-   */
-  private async getChapterTotalCredits(chapterId: string): Promise<number | null> {
-    const rows = await this.db.consumerCreationOperation.findMany({
-      where: { chapterId, actualCreditsMilli: { not: null } },
-      select: { actualCreditsMilli: true },
-    });
-    if (rows.length === 0) {
-      return null;
-    }
-    const sumMilli = rows.reduce((total, row) => total + (row.actualCreditsMilli ?? 0), 0);
-    return sumMilli / 1_000;
-  }
-
   private async serializeOperation(
     operation: ConsumerCreationOperation,
   ): Promise<ConsumerChapterProductionSnapshot> {
     if (!operation.chapterId) {
       throw new AppError("章节生成记录缺少目标章节。", 500);
     }
-    const payload = parsePayload(operation);
+      const payload = parseProductionPayload(operation);
+    const chapterUsage = await this.usageStore.getChapterUsage(operation.chapterId);
     return {
       operationId: operation.id,
       novelId: operation.novelId,
@@ -707,11 +669,25 @@ export class ConsumerChapterProductionService {
       ),
       task: payload.task,
       receivedContent: operation.receivedContent,
-      creditEstimate: await this.getCreditEstimate(operation.kind),
+      creditEstimate: await this.usageStore.getCreditEstimate(operation.kind),
       actualCredits: operation.actualCreditsMilli === null
         ? null
         : operation.actualCreditsMilli / 1_000,
-      chapterTotalCredits: await this.getChapterTotalCredits(operation.chapterId),
+      chapterTotalCredits: chapterUsage.totalCredits,
+      tokenUsage: {
+        promptTokens: operation.promptTokens ?? 0,
+        completionTokens: operation.completionTokens ?? 0,
+        totalTokens: operation.totalTokens ?? 0,
+        callCount: operation.llmCallCount ?? 0,
+      },
+      chapterTokenUsage: {
+        promptTokens: chapterUsage.promptTokens,
+        completionTokens: chapterUsage.completionTokens,
+        totalTokens: chapterUsage.totalTokens,
+        callCount: chapterUsage.callCount,
+      },
+      length: payload.length,
+      qualityWarnings: payload.qualityWarnings,
       errorMessage: operation.errorMessage,
       startedAt: operation.startedAt?.toISOString() ?? null,
       finishedAt: operation.finishedAt?.toISOString() ?? null,

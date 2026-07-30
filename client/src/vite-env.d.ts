@@ -47,10 +47,17 @@ interface Window {
     notifyRendererReady?: () => void;
     notifyAppShellReady?: () => void;
     getUpdaterSnapshot?: () => Promise<{
-      status: "disabled" | "idle" | "checking" | "update-available" | "downloading" | "downloaded" | "not-available" | "error";
+      status: "disabled" | "idle" | "checking" | "update-available" | "downloading" | "verifying" | "downloaded" | "installing" | "not-available" | "error";
       message: string;
       currentVersion: string;
+      currentBuildNumber: number;
       availableVersion: string | null;
+      availableBuildNumber: number | null;
+      releaseNotes: string;
+      fileSize: number | null;
+      forcedUpdate: boolean;
+      minSupportedVersion: string | null;
+      updateRequired: boolean;
       progressPercent: number | null;
       bytesPerSecond: number | null;
       channel: string;
@@ -63,10 +70,17 @@ interface Window {
     }>;
     subscribeUpdaterStatus?: (
       listener: (snapshot: {
-        status: "disabled" | "idle" | "checking" | "update-available" | "downloading" | "downloaded" | "not-available" | "error";
+        status: "disabled" | "idle" | "checking" | "update-available" | "downloading" | "verifying" | "downloaded" | "installing" | "not-available" | "error";
         message: string;
         currentVersion: string;
+        currentBuildNumber: number;
         availableVersion: string | null;
+        availableBuildNumber: number | null;
+        releaseNotes: string;
+        fileSize: number | null;
+        forcedUpdate: boolean;
+        minSupportedVersion: string | null;
+        updateRequired: boolean;
         progressPercent: number | null;
         bytesPerSecond: number | null;
         channel: string;

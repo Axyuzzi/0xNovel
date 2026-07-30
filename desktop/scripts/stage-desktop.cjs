@@ -7,7 +7,6 @@ const desktopDir = path.resolve(__dirname, "..");
 const buildDir = path.join(desktopDir, "build");
 const appDir = path.join(buildDir, "app");
 const resourcesDir = path.join(buildDir, "resources");
-const appUpdateConfigPath = path.join(resourcesDir, "app-update.yml");
 const consumerReleasePolicyPath = path.join(resourcesDir, "consumer-release.json");
 const consumerReleaseDefaultsPath = path.join(
   desktopDir,
@@ -40,6 +39,18 @@ function readConsumerReleaseDefaults() {
       parsed.relayAccountBaseUrl,
       "consumer-release.defaults.json relayAccountBaseUrl",
       true,
+    ),
+    plannerModel: normalizeModelAlias(
+      parsed.plannerModel,
+      "consumer-release.defaults.json plannerModel",
+    ),
+    writerModel: normalizeModelAlias(
+      parsed.writerModel,
+      "consumer-release.defaults.json writerModel",
+    ),
+    reviewModel: normalizeModelAlias(
+      parsed.reviewModel,
+      "consumer-release.defaults.json reviewModel",
     ),
   };
 }
@@ -80,14 +91,6 @@ function replaceFileContents(targetPath, contents) {
   fs.writeFileSync(targetPath, contents, "utf8");
 }
 
-function resolveDesktopUpdateUrl() {
-  return (
-    process.env.OXNOVEL_DESKTOP_UPDATE_URL
-    || process.env.AI_NOVEL_DESKTOP_UPDATE_URL
-    || ""
-  ).trim();
-}
-
 function normalizeOwnedHttpsUrl(value, environmentName, required) {
   const configured = (value || "").trim();
   if (!configured) {
@@ -108,6 +111,28 @@ function normalizeOwnedHttpsUrl(value, environmentName, required) {
   return parsed.toString().replace(/\/$/u, "");
 }
 
+function normalizePackageReleaseCode(value, required) {
+  const configured = typeof value === "string" ? value.trim() : "";
+  if (!configured) {
+    if (required) {
+      throw new Error("OXNOVEL_INTERNAL_PACKAGE_CODE is required for a public consumer release.");
+    }
+    return null;
+  }
+  if (!/^[A-Za-z0-9_-]{32}$/.test(configured)) {
+    throw new Error("OXNOVEL_INTERNAL_PACKAGE_CODE must be exactly 32 safe characters.");
+  }
+  return configured;
+}
+
+function normalizeModelAlias(value, environmentName) {
+  const configured = typeof value === "string" ? value.trim() : "";
+  if (!configured || configured.length > 128 || /\s/u.test(configured)) {
+    throw new Error(`${environmentName} must be a non-empty model alias without whitespace.`);
+  }
+  return configured;
+}
+
 function writeConsumerReleasePolicy() {
   const releaseChannel = (process.env.AI_NOVEL_RELEASE_CHANNEL || "beta").trim().toLowerCase();
   const publicRelease = releaseChannel !== "beta";
@@ -124,10 +149,26 @@ function writeConsumerReleasePolicy() {
     "OXNOVEL_RELAY_ACCOUNT_BASE_URL",
     true,
   );
-  const updateUrl = normalizeOwnedHttpsUrl(
-    resolveDesktopUpdateUrl(),
-    "OXNOVEL_DESKTOP_UPDATE_URL",
+  const packageReleaseBaseUrl = normalizeOwnedHttpsUrl(
+    process.env.OXNOVEL_PACKAGE_RELEASE_BASE_URL || relayAccountBaseUrl,
+    "OXNOVEL_PACKAGE_RELEASE_BASE_URL",
+    true,
+  );
+  const packageReleaseCode = normalizePackageReleaseCode(
+    process.env.OXNOVEL_INTERNAL_PACKAGE_CODE,
     publicRelease,
+  );
+  const plannerModel = normalizeModelAlias(
+    process.env.OXNOVEL_RELAY_PLANNER_MODEL || defaults.plannerModel,
+    "OXNOVEL_RELAY_PLANNER_MODEL",
+  );
+  const writerModel = normalizeModelAlias(
+    process.env.OXNOVEL_RELAY_WRITER_MODEL || defaults.writerModel,
+    "OXNOVEL_RELAY_WRITER_MODEL",
+  );
+  const reviewModel = normalizeModelAlias(
+    process.env.OXNOVEL_RELAY_REVIEW_MODEL || defaults.reviewModel,
+    "OXNOVEL_RELAY_REVIEW_MODEL",
   );
   const allowedRelayOrigins = Array.from(new Set(
     [relayBaseUrl, relayAccountBaseUrl]
@@ -135,36 +176,19 @@ function writeConsumerReleasePolicy() {
       .map((url) => new URL(url).origin),
   ));
   const policy = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     productMode: "consumer",
     releaseChannel,
     relayBaseUrl,
     relayAccountBaseUrl,
+    plannerModel,
+    writerModel,
+    reviewModel,
     allowedRelayOrigins,
-    updateUrl,
+    packageReleaseBaseUrl,
+    packageReleaseCode,
   };
   fs.writeFileSync(consumerReleasePolicyPath, `${JSON.stringify(policy, null, 2)}\n`, "utf8");
-}
-
-function writeDesktopUpdaterConfig() {
-  const releaseChannel = (process.env.AI_NOVEL_RELEASE_CHANNEL || "beta").trim().toLowerCase();
-  const updaterChannel = releaseChannel === "beta" ? "beta" : "latest";
-  const updateUrl = resolveDesktopUpdateUrl();
-
-  if (!updateUrl) {
-    fs.rmSync(appUpdateConfigPath, { force: true });
-    console.log("[stage:desktop] updater disabled: OXNOVEL_DESKTOP_UPDATE_URL is not configured.");
-    return;
-  }
-
-  const config = [
-    "provider: generic",
-    `url: ${JSON.stringify(updateUrl)}`,
-    `channel: ${updaterChannel}`,
-    "updaterCacheDirName: 0xnovelagent-updater",
-    "",
-  ].join("\n");
-  fs.writeFileSync(appUpdateConfigPath, config, "utf8");
 }
 
 function resolveWorkspacePrismaGeneratedDir() {
@@ -332,7 +356,6 @@ function main() {
   ]);
 
   copyDirectory(clientSourceDir, clientTargetDir);
-  writeDesktopUpdaterConfig();
   syncPrismaRuntime();
   detachStagedNativePackages();
   installStagedElectronNativePrebuilds();
@@ -340,9 +363,6 @@ function main() {
   assertExists(desktopMainEntry, "desktop main bundle");
   assertExists(serverEntry, "bundled server entry");
   assertExists(path.join(clientTargetDir, "index.html"), "bundled renderer entry");
-  if (resolveDesktopUpdateUrl()) {
-    assertExists(appUpdateConfigPath, "desktop updater configuration");
-  }
   assertExists(path.join(stagedNodeModulesDir, ".prisma", "client", "default.js"), "bundled Prisma runtime");
   const [firstStagedPrismaClientPackage] = resolveStagedPrismaClientPackageDirs();
   assertExists(

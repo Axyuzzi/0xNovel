@@ -39,3 +39,12 @@ server/prisma-diff-migrations-to-schema.sql
 .spec-workflow/
 .codex-backups/
 .cursor/
+.playwright-cli/
+output/playwright/
+
+# Local agent/tool working directories (do not commit)
+.codex-audit/
+.zcode/
+.impeccable/
+artifacts/
+output/

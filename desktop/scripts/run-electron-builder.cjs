@@ -91,12 +91,6 @@ function normalizeBuildEnvironment(sourceEnv, args) {
   const env = { ...sourceEnv };
   const releaseChannel = firstNonEmpty(env.AI_NOVEL_RELEASE_CHANNEL, "beta").toLowerCase();
   const isPublishRequested = args.includes("--publish");
-  const allowUnsignedRelease =
-    firstNonEmpty(
-      env.AI_NOVEL_ALLOW_UNSIGNED_RELEASE,
-      env.AI_NOVEL_ALLOW_UNSIGNED_WINDOWS_RELEASE,
-    ).toLowerCase() === "true";
-
   const signingLink = firstNonEmpty(
     env.CSC_LINK,
     env.WIN_CSC_LINK,
@@ -122,9 +116,9 @@ function normalizeBuildEnvironment(sourceEnv, args) {
   }
 
   const hasSigning = Boolean(signingLink);
-  if (!releaseChannel.startsWith("beta") && !hasSigning && !allowUnsignedRelease) {
+  if (!releaseChannel.startsWith("beta") && !hasSigning) {
     throw new Error(
-      "Public Windows desktop releases require signing material. Provide CSC_LINK/WIN_CSC_LINK first, or explicitly allow an unsigned release.",
+      "Public Windows desktop releases require signing material. Provide CSC_LINK/WIN_CSC_LINK first.",
     );
   }
 
@@ -133,7 +127,7 @@ function normalizeBuildEnvironment(sourceEnv, args) {
   }
 
   console.log(
-    `[dist:desktop] releaseChannel=${releaseChannel} publish=${isPublishRequested ? "yes" : "no"} signing=${hasSigning ? "configured" : allowUnsignedRelease ? "unsigned-opt-in" : "unsigned-beta"}`,
+    `[dist:desktop] releaseChannel=${releaseChannel} publish=${isPublishRequested ? "yes" : "no"} signing=${hasSigning ? "configured" : "unsigned-beta"}`,
   );
 
   return env;

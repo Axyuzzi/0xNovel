@@ -8,6 +8,8 @@ import morgan from "morgan";
 import type { ApiResponse } from "@0xnovelagent/shared/types/api";
 import { ensureRuntimeDatabaseReady } from "./db/runtimeMigrations";
 import { errorHandler } from "./middleware/errorHandler";
+import { consumerProductBoundary } from "./middleware/consumerProductBoundary";
+import { localApiSessionGuard } from "./middleware/localApiSession";
 import { loadProviderApiKeys } from "./llm/factory";
 import astrologyRouter from "./routes/astrology";
 import agentCatalogRouter from "./routes/agentCatalog";
@@ -43,6 +45,10 @@ import tasksRouter from "./routes/tasks";
 import titleLibraryRouter from "./routes/titleLibrary";
 import worldRouter from "./modules/setup/world/http";
 import writingFormulaRouter from "./routes/writingFormula";
+import consumerRelayRouter from "./relay/http/consumerRelayRoutes";
+import consumerWorkspaceRouter from "./modules/consumerWorkspace/http/consumerWorkspaceRoutes";
+import consumerSetupRouter from "./modules/consumerSetup/http/consumerSetupRoutes";
+import consumerChapterProductionRouter from "./modules/consumerProduction/http/consumerChapterProductionRoutes";
 import { novelEventBus, registerNovelEventHandlers } from "./events";
 import { bookAnalysisService } from "./services/bookAnalysis/BookAnalysisService";
 import { ragServices } from "./services/rag";
@@ -58,7 +64,9 @@ import { initializeRagSettingsCompatibility } from "./services/settings/RagCompa
 import { qualityDebtSettingsService } from "./services/settings/QualityDebtSettingsService";
 import { DirectorWorker } from "./workers/directorWorker";
 import { cleanupLogDirectory, resolveLogRetentionConfig } from "./platform/logging/logRetention";
+import { redactLogText } from "./platform/logging/redaction";
 import { resolveLogsRoot } from "./runtime/appPaths";
+import { isConsumerProductMode } from "./config/productMode";
 
 getSharedNovelServices();
 registerNovelEventHandlers(novelEventBus);
@@ -110,17 +118,23 @@ export function createApp() {
   app.use(helmet());
   app.use(morgan((tokens, req, res) => {
     const method = tokens.method(req, res) ?? "-";
-    const url = tokens.url(req, res) ?? "-";
+    const url = redactLogText(tokens.url(req, res) ?? "-");
     const status = tokens.status(req, res) ?? "-";
     const responseTime = tokens["response-time"](req, res) ?? "0";
     const contentLength = tokens.res(req, res, "content-length") ?? "0";
-    const errorMessage = tokens["error-message"](req, res);
+    const errorMessage = redactLogText(tokens["error-message"](req, res));
     const errorSuffix = errorMessage ? ` | error: ${errorMessage}` : "";
     return `${method} ${url} ${status} ${responseTime} ms - ${contentLength}${errorSuffix}`;
   }));
   app.use(express.json({ limit: jsonBodyLimit }));
+  app.use(localApiSessionGuard);
+  app.use(consumerProductBoundary);
 
   app.use("/api/health", healthRouter);
+  app.use("/api/consumer/workspace", consumerWorkspaceRouter);
+  app.use("/api/consumer/setup", consumerSetupRouter);
+  app.use("/api/consumer/production", consumerChapterProductionRouter);
+  app.use("/api/consumer", consumerRelayRouter);
   app.use("/api/agent-catalog", agentCatalogRouter);
   app.use("/api/agent-runs", agentRunsRouter);
   app.use("/api/book-analysis", bookAnalysisRouter);
@@ -252,6 +266,13 @@ function scheduleLogRetentionCleanup(): void {
 }
 
 function initializeBackgroundServices(): BackgroundServicesHandle {
+  if (isConsumerProductMode()) {
+    console.info("[server] consumer mode: professional workers and third-party integrations stay disabled.");
+    return {
+      stop: async () => undefined,
+    };
+  }
+
   ragServices.ragWorker.start();
   ragServices.ragRetrievalTraceRetention.start();
   novelSideEffectWorker.start();
@@ -302,16 +323,18 @@ export async function startServer(options?: ServerStartOptions): Promise<Started
   scheduleLogRetentionCleanup();
   await ensureRuntimeDatabaseReady();
 
-  const ragCompatibilityReport = await initializeRagSettingsCompatibility();
-  if (
-    ragCompatibilityReport.importedSettingKeys.length > 0
-    || ragCompatibilityReport.importedProviderRecords.length > 0
-  ) {
-    console.log("[server] imported legacy RAG env settings.", ragCompatibilityReport);
+  if (!isConsumerProductMode()) {
+    const ragCompatibilityReport = await initializeRagSettingsCompatibility();
+    if (
+      ragCompatibilityReport.importedSettingKeys.length > 0
+      || ragCompatibilityReport.importedProviderRecords.length > 0
+    ) {
+      console.log("[server] imported legacy RAG env settings.", ragCompatibilityReport);
+    }
+    await qualityDebtSettingsService.warnIfAutoPromotionEnabled().catch((error) => {
+      console.warn("[server] failed to inspect pending review auto-promotion settings.", error);
+    });
   }
-  await qualityDebtSettingsService.warnIfAutoPromotionEnabled().catch((error) => {
-    console.warn("[server] failed to inspect pending review auto-promotion settings.", error);
-  });
 
   const app = createApp();
   const { host, port, allowLan } = resolveServerStartOptions(options);

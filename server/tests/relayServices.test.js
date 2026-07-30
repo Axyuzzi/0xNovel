@@ -289,15 +289,31 @@ test("consumer-facing relay errors hide SDK troubleshooting details", () => {
 });
 
 test("consumer relay defaults to a model exposed by the owned relay", () => {
-  const previous = process.env.OXNOVEL_RELAY_MODEL;
-  delete process.env.OXNOVEL_RELAY_MODEL;
+  const names = [
+    "OXNOVEL_RELAY_MODEL",
+    "OXNOVEL_RELAY_PLANNER_MODEL",
+    "OXNOVEL_RELAY_WRITER_MODEL",
+    "OXNOVEL_RELAY_REVIEW_MODEL",
+  ];
+  const previous = new Map(names.map((name) => [name, process.env[name]]));
+  for (const name of names) delete process.env[name];
   try {
-    assert.equal(resolveRelayModelAlias(), "qwen3.6-plus");
+    assert.equal(resolveRelayModelAlias(), "qwen3.7-plus");
+    assert.equal(resolveRelayModelAlias("planner"), "deepseek-v4-flash");
+    assert.equal(resolveRelayModelAlias("writer"), "qwen3.7-plus");
+    assert.equal(resolveRelayModelAlias("review"), "claude-sonnet-4-6");
+
+    process.env.OXNOVEL_RELAY_MODEL = "global-override";
+    assert.equal(resolveRelayModelAlias("planner"), "global-override");
+    process.env.OXNOVEL_RELAY_PLANNER_MODEL = "planner-override";
+    assert.equal(resolveRelayModelAlias("planner"), "planner-override");
   } finally {
-    if (previous === undefined) {
-      delete process.env.OXNOVEL_RELAY_MODEL;
-    } else {
-      process.env.OXNOVEL_RELAY_MODEL = previous;
+    for (const [name, value] of previous) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
     }
   }
 });
@@ -336,8 +352,8 @@ test("one relay API key authorizes balance, logs and payment contracts", async (
             quota: 500_000,
             prompt_tokens: 100,
             completion_tokens: 200,
-            request_id: "req_1",
-            upstream_request_id: "up_1",
+            request_id: "",
+            upstream_request_id: null,
             other: "{}",
           }],
         },

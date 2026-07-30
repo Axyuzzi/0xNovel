@@ -14,7 +14,9 @@ jobs:
     runs-on: windows-latest
     env:
       AI_NOVEL_RELEASE_CHANNEL: beta
-      OXNOVEL_DESKTOP_UPDATE_URL: ${{ secrets.OXNOVEL_DESKTOP_UPDATE_URL }}
+      OXNOVEL_INTERNAL_PACKAGE_CODE: ${{ secrets.OXNOVEL_INTERNAL_PACKAGE_CODE }}
+      OXNOVEL_RELAY_BASE_URL: ${{ secrets.OXNOVEL_RELAY_BASE_URL }}
+      OXNOVEL_RELAY_ACCOUNT_BASE_URL: ${{ secrets.OXNOVEL_RELAY_ACCOUNT_BASE_URL }}
       CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
     steps:
@@ -44,7 +46,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check pillow
 
       - name: Audit commercial egress
-        run: pnpm audit:commercial-egress
+        run: pnpm verify:consumer-release
 
       - name: Regenerate desktop icon assets
         run: python desktop/scripts/generate-desktop-icons.py
@@ -60,6 +62,12 @@ jobs:
 
       - name: Build beta installer
         run: pnpm dist:desktop:nsis:reuse-stage
+
+      - name: Generate 0xAPI package release manifest
+        run: pnpm generate:package-release-manifest
+
+      - name: Generate dependency SBOM and license inventory
+        run: pnpm generate:release-metadata
 
       - name: Preserve beta installer
         uses: actions/upload-artifact@v4

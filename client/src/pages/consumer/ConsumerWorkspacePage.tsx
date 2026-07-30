@@ -9,19 +9,22 @@ import {
   startNextConsumerChapter,
 } from "@/api/consumerChapterProduction";
 import {
-  resolveConsumerChapterCandidate,
   createConsumerChapter,
   downloadConsumerNovel,
   getConsumerChapterWorkspace,
   getConsumerNovelWorkspace,
-  restoreConsumerChapterVersion,
   saveConsumerChapterDraft,
 } from "@/api/consumerWorkspace";
-import { Button } from "@/components/ui/button";
+import { useConsumerSession } from "@/features/consumerAuth/ConsumerSessionContext";
 import { subscribeDesktopBeforeContentClose } from "@/lib/desktop";
 import { registerPrepareLogoutHandler } from "@/lib/prepareLogout";
 import type { ConsumerChapterProductionSnapshot } from "@0xnovelagent/shared/types/consumerChapterProduction";
-import type { ConsumerChapterCandidate, ConsumerChapterWorkspace, ConsumerNovelWorkspace } from "@0xnovelagent/shared/types/consumerWorkspace";
+import {
+  countConsumerChapterCharacters,
+  type ConsumerChapterCandidate,
+  type ConsumerChapterWorkspace,
+  type ConsumerNovelWorkspace,
+} from "@0xnovelagent/shared/types/consumerWorkspace";
 import type { ConsumerChapterRevisionMode } from "@0xnovelagent/shared/types/consumerChapterRevision";
 import type { ConsumerCreditEstimate } from "@0xnovelagent/shared/types/consumerSetup";
 import ConsumerProductionPanel from "./workspace/ConsumerProductionPanel";
@@ -29,7 +32,6 @@ import ConsumerPlanningDialog from "./workspace/ConsumerPlanningDialog";
 import ConsumerEmptyChapterState from "./workspace/ConsumerEmptyChapterState";
 import ConsumerRevisionPanel from "./workspace/ConsumerRevisionPanel";
 import ConsumerStoryReviewPanel from "./workspace/ConsumerStoryReviewPanel";
-import ConsumerVersionHistoryPanel from "./workspace/ConsumerVersionHistoryPanel";
 import ConsumerWorkspaceDialogs from "./workspace/ConsumerWorkspaceDialogs";
 import ConsumerWorkspaceHeader from "./workspace/ConsumerWorkspaceHeader";
 import ConsumerWorkspaceSidebar from "./workspace/ConsumerWorkspaceSidebar";
@@ -37,12 +39,16 @@ import ConsumerWorkspaceErrorBanner from "./workspace/ConsumerWorkspaceErrorBann
 import { ConsumerWorkspaceErrorState, ConsumerWorkspaceLoadingState } from "./workspace/ConsumerWorkspaceGateStates";
 import { useConsumerChapterRevision } from "./workspace/useConsumerChapterRevision";
 import { useConsumerStoryReview } from "./workspace/useConsumerStoryReview";
+import ConsumerChapterEditor from "./workspace/editor/ConsumerChapterEditor";
+import { useConsumerCandidateActions } from "./workspace/revision/useConsumerCandidateActions";
+import { useConsumerSegmentRunController } from "./workspace/segmentRun/useConsumerSegmentRunController";
+import { findLatestConsumerChapter } from "./workspace/segmentRun/segmentRunPosition";
 
 type SaveState = "saved" | "waiting" | "saving" | "error";
-
 export default function ConsumerWorkspacePage() {
   const { id = "", chapterId = "" } = useParams();
   const navigate = useNavigate();
+  const { session } = useConsumerSession();
   const [novelWorkspace, setNovelWorkspace] = useState<ConsumerNovelWorkspace | null>(null);
   const [chapterWorkspace, setChapterWorkspace] = useState<ConsumerChapterWorkspace | null>(null);
   const [content, setContent] = useState("");
@@ -52,7 +58,6 @@ export default function ConsumerWorkspacePage() {
   const [production, setProduction] = useState<ConsumerChapterProductionSnapshot | null>(null);
   const [productionEstimate, setProductionEstimate] = useState<ConsumerCreditEstimate | null>(null);
   const [progress, setProgress] = useState<ConsumerChapterProductionSnapshot[]>([]);
-  const [restoringVersionId, setRestoringVersionId] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [mobileDirectoryOpen, setMobileDirectoryOpen] = useState(false);
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
@@ -60,21 +65,16 @@ export default function ConsumerWorkspacePage() {
   const [storyPanelOpen, setStoryPanelOpen] = useState(false);
   const [planningOpen, setPlanningOpen] = useState(false);
   const [revisionMode, setRevisionMode] = useState<ConsumerChapterRevisionMode>("revise");
-  const [activeCandidateId, setActiveCandidateId] = useState("");
-  const [previewOriginal, setPreviewOriginal] = useState(false);
-  const [candidateBusy, setCandidateBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [error, setError] = useState("");
   const revisionRef = useRef(0);
   const contentRef = useRef("");
   const lastSavedContentRef = useRef("");
-  const cursorRef = useRef<{ start: number | null; end: number | null }>({
-    start: null,
-    end: null,
-  });
+  const cursorRef = useRef<{ start: number | null; end: number | null }>(
+    { start: null, end: null },
+  );
   const saveInFlightRef = useRef<Promise<number> | null>(null);
-
   const loadNovel = useCallback(async () => {
     if (!id) return;
     const data = await getConsumerNovelWorkspace(id);
@@ -154,9 +154,32 @@ export default function ConsumerWorkspacePage() {
       try {
         const next = await getConsumerChapterProduction(id, production.operationId);
         setProduction(next);
-        await loadChapter();
+        if (next.chapterId === chapterId && next.receivedContent !== contentRef.current) {
+          const wordCount = countConsumerChapterCharacters(next.receivedContent);
+          setContent(next.receivedContent);
+          contentRef.current = next.receivedContent;
+          lastSavedContentRef.current = next.receivedContent;
+          setChapterWorkspace((current) => current ? {
+            ...current,
+            chapter: next.task?.title
+              ? { ...current.chapter, title: next.task.title, wordCount }
+              : { ...current.chapter, wordCount },
+            draft: { ...current.draft, content: next.receivedContent },
+          } : current);
+          setNovelWorkspace((current) => current ? {
+            ...current,
+            chapters: current.chapters.map((chapter) => chapter.id === next.chapterId
+              ? {
+                  ...chapter,
+                  title: next.task?.title ?? chapter.title,
+                  wordCount,
+                }
+              : chapter),
+          } : current);
+          setSaveState("saved");
+        }
         if (!["created", "running"].includes(next.status)) {
-          await Promise.all([loadNovel(), loadProduction()]);
+          await Promise.all([loadNovel(), loadChapter(), loadProduction()]);
         }
       } catch (pollError) {
         setError(pollError instanceof Error ? pollError.message : "暂时无法刷新生成进度。");
@@ -164,7 +187,7 @@ export default function ConsumerWorkspacePage() {
         polling = false;
       }
     };
-    const timer = window.setInterval(() => void poll(), 1_000);
+    const timer = window.setInterval(() => void poll(), 350);
     return () => window.clearInterval(timer);
   }, [id, loadChapter, loadNovel, loadProduction, production]);
 
@@ -220,11 +243,71 @@ export default function ConsumerWorkspacePage() {
     refreshChapter: loadChapter,
     onError: setError,
   });
+  const applyChapterWorkspace = useCallback((workspace: ConsumerChapterWorkspace) => {
+    setChapterWorkspace(workspace);
+    setContent(workspace.draft.content);
+    contentRef.current = workspace.draft.content;
+    lastSavedContentRef.current = workspace.draft.content;
+    revisionRef.current = workspace.draft.revision;
+    setSaveState("saved");
+  }, []);
+  const candidateActions = useConsumerCandidateActions({
+    novelId: id,
+    chapterId,
+    persistDraft,
+    refreshRevision: revisionWorkflow.load,
+    applyWorkspace: applyChapterWorkspace,
+    setPanelOpen: setRevisionPanelOpen,
+    onError: setError,
+  });
+  const { activeCandidateId, setActiveCandidateId, previewOriginal, setPreviewOriginal } =
+    candidateActions;
+  const { candidateBusy, restoringVersionId, adoptCandidate, rejectCandidate, restoreVersion } =
+    candidateActions;
   const storyWorkflow = useConsumerStoryReview({
     novelId: id,
     onError: setError,
     onPlanningChanged: loadNovel,
   });
+  const navigateToChapter = useCallback((nextChapterId: string) => {
+    navigate(`/novels/${encodeURIComponent(id)}/chapters/${encodeURIComponent(nextChapterId)}`);
+  }, [id, navigate]);
+  const segmentWorkflow = useConsumerSegmentRunController({
+    novelId: id,
+    chapterId,
+    planning: storyWorkflow.planning,
+    persistDraft,
+    loadNovel,
+    loadChapter,
+    loadProduction,
+    refreshCheckpoint: storyWorkflow.refreshCheckpoint,
+    navigateToChapter,
+    onError: setError,
+  });
+
+  useEffect(() => {
+    if (production?.status !== "succeeded") {
+      return;
+    }
+    void storyWorkflow.refreshCheckpoint()
+      .then((checkpoint) => {
+        if (!checkpoint?.required) return;
+        setRevisionPanelOpen(false);
+        setStoryPanelOpen(false);
+        setError("");
+      })
+      .catch((checkpointError) => {
+        setError(
+          checkpointError instanceof Error
+            ? checkpointError.message
+            : "暂时无法读取下一步。",
+        );
+      });
+  }, [
+    production?.operationId,
+    production?.status,
+    storyWorkflow.refreshCheckpoint,
+  ]);
 
   useEffect(() => {
     const pending = chapterWorkspace?.candidates.filter(
@@ -271,7 +354,6 @@ export default function ConsumerWorkspacePage() {
     }, 500);
     return () => window.clearTimeout(timer);
   }, [chapterWorkspace, content, persistDraft]);
-
   const createChapter = async (title: string) => {
     if (!id) return;
     setCreatingChapter(true);
@@ -306,11 +388,18 @@ export default function ConsumerWorkspacePage() {
         `/novels/${encodeURIComponent(id)}/chapters/${encodeURIComponent(started.chapterId)}`,
       );
     } catch (productionError) {
-      setError(
-        productionError instanceof Error
-          ? productionError.message
-          : "下一章没有开始，请重试。",
-      );
+      const checkpoint = await storyWorkflow.refreshCheckpoint().catch(() => null);
+      if (checkpoint?.required) {
+        setRevisionPanelOpen(false);
+        setStoryPanelOpen(false);
+        setError("");
+      } else {
+        setError(
+          productionError instanceof Error
+            ? productionError.message
+            : "下一章没有开始，请重试。",
+        );
+      }
       await loadProduction().catch(() => undefined);
     } finally {
       setProductionBusy(false);
@@ -352,7 +441,6 @@ export default function ConsumerWorkspacePage() {
     setStoryPanelOpen(true);
     setError("");
   };
-
   const runStoryAction = async (action: () => Promise<void>, fallback: string) => {
     setError("");
     try {
@@ -385,88 +473,6 @@ export default function ConsumerWorkspacePage() {
     }
   };
 
-  const adoptCandidate = async (candidateId: string) => {
-    if (!id || !chapterId) return;
-    setCandidateBusy(true);
-    setError("");
-    try {
-      const expectedRevision = await persistDraft();
-      const data = await resolveConsumerChapterCandidate(
-        id,
-        chapterId,
-        candidateId,
-        { action: "adopt", expectedRevision },
-      );
-      setChapterWorkspace(data);
-      setContent(data.draft.content);
-      contentRef.current = data.draft.content;
-      lastSavedContentRef.current = data.draft.content;
-      revisionRef.current = data.draft.revision;
-      setSaveState("saved");
-      setActiveCandidateId("");
-      setPreviewOriginal(false);
-      setRevisionPanelOpen(false);
-      await revisionWorkflow.load();
-    } catch (candidateError) {
-      setError(
-        candidateError instanceof Error
-          ? candidateError.message
-          : "修改建议没有采用成功。",
-      );
-    } finally {
-      setCandidateBusy(false);
-    }
-  };
-
-  const rejectCandidate = async (candidateId: string) => {
-    if (!id || !chapterId) return;
-    setCandidateBusy(true);
-    setError("");
-    try {
-      const data = await resolveConsumerChapterCandidate(
-        id,
-        chapterId,
-        candidateId,
-        { action: "reject" },
-      );
-      setChapterWorkspace(data);
-      const remaining = data.candidates.filter((candidate) => candidate.status === "pending");
-      setActiveCandidateId(remaining[0]?.id ?? "");
-      setPreviewOriginal(false);
-      if (remaining.length === 0) setRevisionPanelOpen(false);
-    } catch (candidateError) {
-      setError(
-        candidateError instanceof Error
-          ? candidateError.message
-          : "暂时无法保留原文，请重试。",
-      );
-    } finally {
-      setCandidateBusy(false);
-    }
-  };
-
-  const restoreVersion = async (versionId: string) => {
-    if (!id || !chapterId) return;
-    setRestoringVersionId(versionId);
-    setError("");
-    try {
-      await persistDraft();
-      const data = await restoreConsumerChapterVersion(id, chapterId, versionId, {
-        expectedRevision: revisionRef.current,
-      });
-      setChapterWorkspace(data);
-      setContent(data.draft.content);
-      contentRef.current = data.draft.content;
-      lastSavedContentRef.current = data.draft.content;
-      revisionRef.current = data.draft.revision;
-      setSaveState("saved");
-    } catch (restoreError) {
-      setError(restoreError instanceof Error ? restoreError.message : "历史版本没有恢复成功。");
-    } finally {
-      setRestoringVersionId("");
-    }
-  };
-
   const exportNovel = async () => {
     if (!id || !novelWorkspace) return;
     setExporting(true);
@@ -480,39 +486,36 @@ export default function ConsumerWorkspacePage() {
       setExporting(false);
     }
   };
-
-  if (loading) {
-    return <ConsumerWorkspaceLoadingState />;
-  }
-
+  if (loading) return <ConsumerWorkspaceLoadingState />;
   if (!novelWorkspace || error && !chapterWorkspace && chapterId) {
     return <ConsumerWorkspaceErrorState message={error || "作品不存在。"} />;
   }
 
   const nextOrder = novelWorkspace.chapters.length + 1;
-  const pendingCandidates: ConsumerChapterCandidate[] = chapterWorkspace?.candidates.filter(
-    (candidate) => candidate.status === "pending",
-  ) ?? [];
-  const activeCandidate = pendingCandidates.find(
-    (candidate) => candidate.id === activeCandidateId,
-  ) ?? pendingCandidates[0] ?? null;
-  const candidatePreview = revisionPanelOpen && !previewOriginal
-    ? activeCandidate
-    : null;
+  const latestChapter = findLatestConsumerChapter(novelWorkspace.chapters);
+  const pendingCandidates: ConsumerChapterCandidate[] =
+    chapterWorkspace?.candidates.filter((candidate) => candidate.status === "pending") ?? [];
+  const activeCandidate = pendingCandidates.find((candidate) => candidate.id === activeCandidateId)
+    ?? pendingCandidates[0] ?? null;
+  const candidatePreview = revisionPanelOpen && !previewOriginal ? activeCandidate : null;
   const revisionActive = revisionWorkflow.operation?.status === "created"
     || revisionWorkflow.operation?.status === "running";
   const storyActive = storyWorkflow.operation?.status === "created"
     || storyWorkflow.operation?.status === "running";
+  const segmentActive = segmentWorkflow.run &&
+    ["created", "running", "pausing"].includes(segmentWorkflow.run.status);
   const storyPanelVisible = Boolean(storyWorkflow.checkpoint?.required) || storyPanelOpen;
   const editorReadOnly = Boolean(candidatePreview)
     || revisionActive
     || storyActive
+    || segmentActive
     || production?.status === "created"
     || production?.status === "running";
 
   return (
     <div className="flex h-full min-h-0 bg-white">
       <ConsumerWorkspaceSidebar
+        novelId={id}
         novelTitle={novelWorkspace.novel.title}
         chapters={novelWorkspace.chapters}
         selectedChapterId={chapterId}
@@ -553,62 +556,41 @@ export default function ConsumerWorkspacePage() {
             />
 
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-              <div className="flex min-h-[58dvh] min-w-0 shrink-0 lg:min-h-0 lg:flex-1 lg:shrink">
-                <div className="min-w-0 flex-1 overflow-y-auto">
-                  {activeCandidate && revisionPanelOpen ? (
-                    <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-2 text-xs text-slate-700 sm:px-6 md:px-10">
-                      <span>
-                        {candidatePreview ? "正在查看修改建议，原正文没有改变。" : "正在查看原正文。"}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="shrink-0"
-                        onClick={() => setPreviewOriginal((current) => !current)}
-                      >
-                        {candidatePreview ? "查看原文" : "查看修改稿"}
-                      </Button>
-                    </div>
-                  ) : null}
-                  <div className="mx-auto min-h-full max-w-3xl px-5 py-6 sm:px-6 sm:py-8 md:px-10 md:py-10">
-                    <textarea
-                      aria-label={`${chapterWorkspace.chapter.title}${candidatePreview ? "修改建议" : "正文"}`}
-                      value={candidatePreview?.content ?? content}
-                      spellCheck
-                      readOnly={editorReadOnly}
-                      className="min-h-[50dvh] w-full resize-none border-0 bg-transparent text-base leading-8 text-slate-950 outline-none placeholder:text-slate-500 read-only:cursor-wait read-only:text-slate-800 sm:text-[17px] lg:min-h-[calc(100dvh-13rem)]"
-                      placeholder={
-                        production?.status === "created" || production?.status === "running"
-                          ? "正文生成后会出现在这里……"
-                          : revisionActive
-                            ? "修改建议生成期间，当前正文保持不变。"
-                          : "从这里开始写这一章……"
-                      }
-                      onChange={(event) => {
-                        const nextContent = event.target.value;
-                        contentRef.current = nextContent;
-                        setContent(nextContent);
-                      }}
-                      onSelect={(event) => {
-                        cursorRef.current = {
-                          start: event.currentTarget.selectionStart,
-                          end: event.currentTarget.selectionEnd,
-                        };
-                      }}
-                      onBlur={() => void persistDraft()}
-                    />
-                  </div>
-                </div>
-
-                {historyOpen ? (
-                  <ConsumerVersionHistoryPanel
-                    versions={chapterWorkspace.versions}
-                    restoringVersionId={restoringVersionId}
-                    onRestore={(versionId) => void restoreVersion(versionId)}
-                  />
-                ) : null}
-              </div>
+              <ConsumerChapterEditor
+                chapterTitle={chapterWorkspace.chapter.title}
+                content={content}
+                candidate={activeCandidate}
+                candidatePreview={candidatePreview}
+                revisionPanelOpen={revisionPanelOpen}
+                revisionActive={revisionActive}
+                productionStatus={production?.status ?? null}
+                readOnly={editorReadOnly}
+                historyOpen={historyOpen}
+                versions={chapterWorkspace.versions}
+                restoringVersionId={restoringVersionId}
+                onToggleCandidatePreview={() => setPreviewOriginal((current) => !current)}
+                onContentChange={(nextContent) => {
+                  const wordCount = countConsumerChapterCharacters(nextContent);
+                  contentRef.current = nextContent;
+                  setContent(nextContent);
+                  setChapterWorkspace((current) => current ? {
+                    ...current,
+                    chapter: { ...current.chapter, wordCount },
+                    draft: { ...current.draft, content: nextContent },
+                  } : current);
+                  setNovelWorkspace((current) => current ? {
+                    ...current,
+                    chapters: current.chapters.map((chapter) => chapter.id === chapterId
+                      ? { ...chapter, wordCount }
+                      : chapter),
+                  } : current);
+                }}
+                onSelectionChange={(start, end) => {
+                  cursorRef.current = { start, end };
+                }}
+                onBlur={() => void persistDraft()}
+                onRestoreVersion={(versionId) => void restoreVersion(versionId)}
+              />
 
               {revisionPanelOpen ? (
                 <ConsumerRevisionPanel
@@ -658,10 +640,24 @@ export default function ConsumerWorkspacePage() {
                   production={production}
                   estimate={productionEstimate}
                   progress={progress}
+                  currentPhase={storyWorkflow.planning?.currentPhase ?? null}
+                  currentChapterOrder={chapterWorkspace.chapter.order}
+                  latestChapterOrder={latestChapter?.order ?? chapterWorkspace.chapter.order}
+                  availableCredits={
+                    session.status === "authenticated"
+                      ? session.balance.availableCredits
+                      : null
+                  }
+                  segmentRun={segmentWorkflow.run}
+                  segmentBusy={segmentWorkflow.busy}
                   busy={productionBusy}
                   saveBlocked={saveState === "error"}
                   hasContent={Boolean(content.trim())}
                   onContinueNext={() => void continueNextChapter()}
+                  onOpenLatestChapter={() => latestChapter && navigateToChapter(latestChapter.id)}
+                  onStartSegment={() => void segmentWorkflow.start()}
+                  onPauseSegment={() => void segmentWorkflow.pause()}
+                  onResumeSegment={() => void segmentWorkflow.resume()}
                   onResume={() => void resumeProduction()}
                   onOpenRevision={openRevision}
                 />

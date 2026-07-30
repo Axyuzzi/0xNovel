@@ -1,6 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
+const { execFileSync, spawn } = require("node:child_process");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const distDir = path.join(repoRoot, "desktop", "build", "dist");
@@ -9,14 +9,26 @@ const installDir = path.join(smokeRoot, "install");
 const dataDir = path.join(smokeRoot, "data");
 const markerFile = path.join(dataDir, "retained-marker.txt");
 const expectedExeName = "0xNovelAgent.exe";
-const desktopShortcutDir = path.join(process.env.USERPROFILE || "", "Desktop");
-const startMenuProgramsDir = path.join(
-  process.env.APPDATA || "",
-  "Microsoft",
-  "Windows",
-  "Start Menu",
-  "Programs",
-);
+const desktopShortcutDirs = [
+  path.join(process.env.USERPROFILE || "", "Desktop"),
+  path.join(process.env.PUBLIC || "", "Desktop"),
+];
+const startMenuProgramsDirs = [
+  path.join(
+    process.env.APPDATA || "",
+    "Microsoft",
+    "Windows",
+    "Start Menu",
+    "Programs",
+  ),
+  path.join(
+    process.env.ProgramData || "",
+    "Microsoft",
+    "Windows",
+    "Start Menu",
+    "Programs",
+  ),
+];
 
 function ensureCleanDir(targetDir) {
   fs.rmSync(targetDir, { recursive: true, force: true });
@@ -25,6 +37,39 @@ function ensureCleanDir(targetDir) {
 
 function ensureDir(targetDir) {
   fs.mkdirSync(targetDir, { recursive: true });
+}
+
+function findRegisteredInstallation() {
+  const script = [
+    "$roots = @(",
+    "  'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall',",
+    "  'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall',",
+    "  'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall'",
+    ")",
+    "$records = foreach ($root in $roots) {",
+    "  if (Test-Path -LiteralPath $root) {",
+    "    Get-ChildItem -LiteralPath $root | ForEach-Object {",
+    "      $item = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue",
+    "      if ($item.DisplayName -like '0xNovelAgent *') {",
+    "        [pscustomobject]@{ DisplayName = $item.DisplayName; UninstallString = $item.UninstallString }",
+    "      }",
+    "    }",
+    "  }",
+    "}",
+    "$records | ConvertTo-Json -Compress",
+  ].join("\n");
+
+  const output = execFileSync(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", script],
+    { encoding: "utf8", windowsHide: true },
+  ).trim();
+  if (!output) {
+    return null;
+  }
+
+  const parsed = JSON.parse(output);
+  return Array.isArray(parsed) ? parsed[0] ?? null : parsed;
 }
 
 function findNewestMatchingFile(directory, predicate) {
@@ -119,6 +164,16 @@ function findShortcut(directory, nameFragment) {
   return null;
 }
 
+function findShortcutInDirectories(directories, nameFragment) {
+  for (const directory of directories) {
+    const shortcut = findShortcut(directory, nameFragment);
+    if (shortcut) {
+      return shortcut;
+    }
+  }
+  return null;
+}
+
 async function killProcessTree(pid) {
   if (!pid) {
     return;
@@ -175,6 +230,14 @@ async function uninstallSilently() {
 }
 
 async function main() {
+  const registeredInstallation = findRegisteredInstallation();
+  if (registeredInstallation) {
+    throw new Error(
+      `Refusing to replace an existing ${registeredInstallation.DisplayName} installation. `
+      + "Run the installer smoke test on a clean Windows machine or isolated CI runner.",
+    );
+  }
+
   ensureCleanDir(smokeRoot);
   const installerPath = findNewestMatchingFile(distDir, (name) => /setup.*\.exe$/i.test(name) && !name.includes("portable"));
   const installedExePath = path.join(installDir, expectedExeName);
@@ -183,8 +246,8 @@ async function main() {
   console.log(`[verify:desktop:installer] using installer ${installerPath}`);
 
   await installSilently(installerPath);
-  const desktopShortcut = findShortcut(desktopShortcutDir, "0xNovelAgent");
-  const startMenuShortcut = findShortcut(startMenuProgramsDir, "0xNovelAgent");
+  const desktopShortcut = findShortcutInDirectories(desktopShortcutDirs, "0xNovelAgent");
+  const startMenuShortcut = findShortcutInDirectories(startMenuProgramsDirs, "0xNovelAgent");
 
   if (!desktopShortcut) {
     throw new Error("Desktop shortcut was not created by the NSIS installer.");

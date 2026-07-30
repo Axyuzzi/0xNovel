@@ -410,6 +410,10 @@ model Novel {
   sideEffectJobs     NovelSideEffectJob[]
   novelWorld         NovelWorld?
   factEntries        NovelFactEntry[]
+  consumerCreationOperations ConsumerCreationOperation[]
+  consumerStorySetup ConsumerStorySetup?
+  consumerPlanningVersions ConsumerPlanningVersion[]
+  consumerSegmentRuns ConsumerSegmentRun[]
   createdAt          DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
@@ -569,10 +573,176 @@ model Chapter {
   characterResourceEvents CharacterResourceEvent[]
   artifactSyncCheckpoints ChapterArtifactSyncCheckpoint[]
   volumeChapterPlans VolumeChapterPlan[]
+  consumerDraft   ConsumerChapterDraft?
+  consumerCandidates ConsumerChapterCandidate[]
+  consumerVersions ConsumerChapterVersion[]
+  consumerCreationOperations ConsumerCreationOperation[]
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
   @@index([novelId, order])
+}
+
+model ConsumerChapterDraft {
+  id              String   @id @default(cuid())
+  chapterId       String   @unique
+  content         String   @default("")
+  revision        Int      @default(0)
+  cursorStart     Int?
+  cursorEnd       Int?
+  baseVersionId   String?
+  source          String   @default("manual")
+  chapter         Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model ConsumerChapterCandidate {
+  id              String   @id @default(cuid())
+  chapterId       String
+  content         String
+  instruction     String?
+  source          String   @default("ai_revision")
+  status          String   @default("pending")
+  operationId     String?
+  chapter         Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  operation       ConsumerCreationOperation? @relation(fields: [operationId], references: [id], onDelete: SetNull)
+  resolvedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([chapterId, status, createdAt])
+  @@index([operationId])
+}
+
+model ConsumerChapterVersion {
+  id                String   @id @default(cuid())
+  chapterId         String
+  sequence          Int
+  title             String
+  content           String
+  contentHash       String
+  reason            String
+  sourceCandidateId String?
+  operationId       String?
+  chapter           Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  operation         ConsumerCreationOperation? @relation(fields: [operationId], references: [id], onDelete: SetNull)
+  createdAt         DateTime @default(now())
+
+  @@unique([chapterId, sequence])
+  @@index([chapterId, createdAt])
+  @@index([operationId])
+}
+
+model ConsumerCreationOperation {
+  id                       String   @id @default(cuid())
+  requestKey               String   @unique
+  novelId                  String
+  chapterId                String?
+  kind                     String
+  status                   String   @default("created")
+  stage                    String?
+  inputJson                String?
+  receivedContent          String   @default("")
+  estimatedCreditsMilli    Int?
+  actualCreditsMilli       Int?
+  promptTokens             Int      @default(0)
+  completionTokens         Int      @default(0)
+  totalTokens              Int      @default(0)
+  llmCallCount             Int      @default(0)
+  relayRequestId           String?
+  resultRefType            String?
+  resultRefId              String?
+  errorCode                String?
+  errorMessage             String?
+  novel                    Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  chapter                  Chapter? @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  candidates               ConsumerChapterCandidate[]
+  versions                 ConsumerChapterVersion[]
+  startedAt                DateTime?
+  finishedAt               DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([novelId, createdAt])
+  @@index([chapterId, createdAt])
+  @@index([status, updatedAt])
+  @@index([relayRequestId])
+}
+
+model ConsumerStorySetup {
+  id                       String   @id @default(cuid())
+  novelId                  String   @unique
+  idea                     String
+  step                     String   @default("story_direction")
+  status                   String   @default("awaiting_generation")
+  revision                 Int      @default(0)
+  directionsJson           String?
+  selectedDirectionJson    String?
+  bookSkeletonJson         String?
+  volumePlanJson           String?
+  currentPhaseJson         String?
+  firstChapterJson         String?
+  firstChapterId           String?
+  firstChapterCandidateId  String?
+  activeOperationId        String?
+  lastActualCreditsMilli   Int?
+  lastError                String?
+  novel                    Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([step, status, updatedAt])
+  @@index([activeOperationId])
+}
+
+model ConsumerPlanningVersion {
+  id                       String   @id @default(cuid())
+  novelId                  String
+  sequence                 Int
+  label                    String
+  reason                   String
+  bookSkeletonJson         String
+  volumePlanJson           String
+  currentPhaseJson         String
+  sourceOperationId        String?
+  restoredFromVersionId    String?
+  novel                    Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  createdAt                DateTime @default(now())
+
+  @@unique([novelId, sequence])
+  @@index([novelId, createdAt])
+  @@index([sourceOperationId])
+}
+
+model ConsumerSegmentRun {
+  id                    String   @id @default(cuid())
+  requestKey            String   @unique
+  novelId               String
+  sourceChapterId       String
+  planningRevision      Int
+  phaseName             String
+  phaseObjective        String
+  phaseStartOrder       Int
+  phaseEndOrder         Int
+  firstTargetOrder      Int
+  completedThroughOrder Int
+  currentChapterId      String?
+  currentChapterOrder   Int?
+  currentOperationId    String?
+  operationIdsJson      String   @default("[]")
+  status                String   @default("created")
+  pauseRequestedAt      DateTime?
+  errorMessage          String?
+  startedAt             DateTime?
+  finishedAt            DateTime?
+  novel                 Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([novelId, status, updatedAt])
+  @@index([currentOperationId])
 }
 
 model ChapterArtifactSyncCheckpoint {

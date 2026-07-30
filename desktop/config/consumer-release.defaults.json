@@ -1,4 +1,7 @@
 {
-  "relayBaseUrl": "https://api.0xkey.cn/v1",
-  "relayAccountBaseUrl": "https://api.0xkey.cn"
+  "relayBaseUrl": "https://your-relay.example.com/v1",
+  "relayAccountBaseUrl": "https://your-relay.example.com",
+  "plannerModel": "deepseek-v4-flash",
+  "writerModel": "qwen3.7-plus",
+  "reviewModel": "claude-sonnet-4-6"
 }

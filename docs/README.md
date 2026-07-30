@@ -59,6 +59,8 @@
 
 用于沉淀长期项目知识，帮助未来开发者和 AI Agent 理解关键架构决策、工作流边界、运行协议、调试经验和产品设计依据。
 
+当前从专业 B 端系统改造为本地 C 端 SaaS 的全部有效决策，统一维护在 [本地 C 端 SaaS 完整改造与执行方案](./wiki/architecture/local-exe-saas-rebuild-plan.md)；产品讨论、实施排期和验收不得再从多份专项文档拼装。
+
 Wiki 不替代计划、检查点或发布说明：
 
 - `docs/wiki` 记录稳定规则和原因。
@@ -68,6 +70,7 @@ Wiki 不替代计划、检查点或发布说明：
 - `docs/releases` 记录用户可见变化。
 
 - [Wiki Index](./wiki/README.md)
+- [本地 C 端 SaaS 完整改造与执行方案](./wiki/architecture/local-exe-saas-rebuild-plan.md)
 - [Wiki Entry Template](./wiki/entry-template.md)
 - [Module Boundaries](./wiki/architecture/module-boundaries.md)
 - [Auto Director Runtime](./wiki/workflows/auto-director-runtime.md)

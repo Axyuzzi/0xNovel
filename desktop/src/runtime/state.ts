@@ -5,7 +5,6 @@ export type DesktopBootstrapState = "launching" | "starting-server" | "loading-u
 export type DesktopBootstrapStage =
   | "launching"
   | "app-ready"
-  | "splash-shown"
   | "server-starting"
   | "server-healthy"
   | "renderer-ready"
@@ -29,7 +28,9 @@ export type DesktopUpdaterStatus =
   | "checking"
   | "update-available"
   | "downloading"
+  | "verifying"
   | "downloaded"
+  | "installing"
   | "not-available"
   | "error";
 
@@ -37,7 +38,14 @@ export interface DesktopUpdaterSnapshot {
   status: DesktopUpdaterStatus;
   message: string;
   currentVersion: string;
+  currentBuildNumber: number;
   availableVersion: string | null;
+  availableBuildNumber: number | null;
+  releaseNotes: string;
+  fileSize: number | null;
+  forcedUpdate: boolean;
+  minSupportedVersion: string | null;
+  updateRequired: boolean;
   progressPercent: number | null;
   bytesPerSecond: number | null;
   channel: string;
@@ -110,8 +118,8 @@ export const desktopBootstrapStore = new SnapshotStore<DesktopBootstrapSnapshot>
   createBootstrapSnapshot({
     state: "launching",
     stage: "launching",
-    title: "正在启动桌面工作区",
-    detail: "正在准备桌面运行时和本地工作区。",
+    title: "正在准备你的创作空间",
+    detail: "正在打开 0xNovelAgent。",
     canRetry: false,
   }),
 );
@@ -121,7 +129,14 @@ export const desktopUpdaterStore = new SnapshotStore<DesktopUpdaterSnapshot>(
     status: "disabled",
     message: "Updates are unavailable until the installed desktop build finishes booting.",
     currentVersion: "0.0.0",
+    currentBuildNumber: 0,
     availableVersion: null,
+    availableBuildNumber: null,
+    releaseNotes: "",
+    fileSize: null,
+    forcedUpdate: false,
+    minSupportedVersion: null,
+    updateRequired: false,
     progressPercent: null,
     bytesPerSecond: null,
     channel: "beta",

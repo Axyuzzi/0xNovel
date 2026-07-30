@@ -9,6 +9,7 @@ import {
   AUTO_DIRECTOR_MOBILE_CLASSES,
   shouldUseAutoDirectorMobileFullWidthContent,
 } from "@/mobile/autoDirector";
+import { APP_PRODUCT_MODE } from "@/lib/constants";
 
 interface NavbarProps {
   workspaceNavMode?: "workspace" | "project";
@@ -21,6 +22,7 @@ export default function Navbar(props: NavbarProps) {
   const isHome = location.pathname === "/";
   const showWorkspaceToggle = Boolean(workspaceNavMode && onWorkspaceNavModeChange);
   const useMobileAutoDirectorShell = shouldUseAutoDirectorMobileFullWidthContent(location.pathname);
+  const isConsumerProduct = APP_PRODUCT_MODE === "consumer";
 
   return (
     <header className="flex h-16 min-w-0 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6">
@@ -29,13 +31,13 @@ export default function Navbar(props: NavbarProps) {
         <div className="flex min-w-0 flex-col leading-tight">
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="min-w-0 truncate text-sm font-semibold">0xNovelAgent</span>
-            <AppVersionBadge />
-            <ProjectGithubLink />
+            {!isConsumerProduct ? <AppVersionBadge /> : null}
+            {!isConsumerProduct ? <ProjectGithubLink /> : null}
           </div>
           <span className="hidden truncate text-[11px] text-muted-foreground sm:block">0xNovelAgent</span>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+      {!isConsumerProduct ? <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         {!isHome && showWorkspaceToggle ? (
           <Button
             type="button"
@@ -51,7 +53,7 @@ export default function Navbar(props: NavbarProps) {
         <div className={useMobileAutoDirectorShell ? AUTO_DIRECTOR_MOBILE_CLASSES.navbarModelSelector : undefined}>
           <LLMSelector compact showBadge={false} showHelperText={false} />
         </div>
-      </div>
+      </div> : null}
     </header>
   );
 }

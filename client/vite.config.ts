@@ -60,6 +60,7 @@ function resolveDesktopAppVersion(): string {
 clearStaleOptimizeCache(__dirname);
 
 const isDesktopRelativeBaseBuild = process.env.AI_NOVEL_CLIENT_BASE === "relative";
+const isConsumerOnlyBuild = process.env.OXNOVEL_CONSUMER_ONLY_BUILD === "true";
 const appVersion = resolveDesktopAppVersion();
 
 export default defineConfig({
@@ -69,10 +70,25 @@ export default defineConfig({
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion),
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "src"),
-      "@0xnovelagent/shared": path.resolve(__dirname, "../shared"),
-    },
+    alias: [
+      {
+        find: "@/router/SelectedAppRouter",
+        replacement: path.resolve(
+          __dirname,
+          isConsumerOnlyBuild
+            ? "src/router/ConsumerAppRouter.tsx"
+            : "src/router/SelectedAppRouter.tsx",
+        ),
+      },
+      {
+        find: "@",
+        replacement: path.resolve(__dirname, "src"),
+      },
+      {
+        find: "@0xnovelagent/shared",
+        replacement: path.resolve(__dirname, "../shared"),
+      },
+    ],
   },
   build: {
     chunkSizeWarningLimit: 1400,

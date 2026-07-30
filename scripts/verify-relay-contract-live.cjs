@@ -7,7 +7,16 @@ const accountBaseUrl = (
   || ""
 ).trim();
 const modelBaseUrl = (process.env.OXNOVEL_RELAY_BASE_URL || "").trim();
-const model = (process.env.OXNOVEL_RELAY_MODEL || "auto").trim();
+const globalModelOverride = process.env.OXNOVEL_RELAY_MODEL?.trim();
+const models = Array.from(new Set(
+  globalModelOverride
+    ? [globalModelOverride]
+    : [
+      process.env.OXNOVEL_RELAY_PLANNER_MODEL?.trim() || "deepseek-v4-flash",
+      process.env.OXNOVEL_RELAY_WRITER_MODEL?.trim() || "qwen3.7-plus",
+      process.env.OXNOVEL_RELAY_REVIEW_MODEL?.trim() || "claude-sonnet-4-6",
+    ],
+));
 const runModel = process.env.OXNOVEL_RELAY_CONTRACT_RUN_MODEL === "true";
 const paidOrderNo = process.env.OXNOVEL_RELAY_CONTRACT_PAID_ORDER_NO?.trim();
 
@@ -93,7 +102,7 @@ async function verifyPaidOrder() {
   );
 }
 
-async function invokeModel() {
+async function invokeModel(model) {
   const url = new URL(`${modelBaseUrl.replace(/\/+$/, "")}/chat/completions`);
   const response = await fetch(url, {
     method: "POST",
@@ -121,39 +130,43 @@ async function invokeModel() {
   return body.id;
 }
 
-async function verifyModelDebit(before) {
+async function verifyModelDebit(initialBalance) {
   if (!runModel) {
     console.log(
       "[relay-contract:live] billed model check skipped; set OXNOVEL_RELAY_CONTRACT_RUN_MODEL=true to spend a minimal real call.",
     );
     return;
   }
-  const completionId = await invokeModel();
-  let after = before;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-    after = await readBalance();
-    if (Number(after.usedBalance) > Number(before.usedBalance)) break;
+  let before = initialBalance;
+  for (const model of models) {
+    const completionId = await invokeModel(model);
+    let after = before;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      after = await readBalance();
+      if (Number(after.usedBalance) > Number(before.usedBalance)) break;
+    }
+    assert.ok(
+      Number(after.usedBalance) > Number(before.usedBalance),
+      `The live ${model} call did not increase usedBalance.`,
+    );
+    assert.ok(
+      Number(after.balance) < Number(before.balance),
+      `The live ${model} call did not reduce balance.`,
+    );
+    const recentLogs = await relayRequest(accountUrl("/api/usage/logs", new URLSearchParams({
+      p: "1",
+      page_size: "20",
+      type: "2",
+    })));
+    assert.ok(recentLogs.items.length > 0, `No usage log appeared after the ${model} call.`);
+    console.log(
+      `[relay-contract:live] ${model} completion ${completionId || "(no id)"} debited ${
+        Number(before.balance) - Number(after.balance)
+      } credits and produced a usage log.`,
+    );
+    before = after;
   }
-  assert.ok(
-    Number(after.usedBalance) > Number(before.usedBalance),
-    "The live model call did not increase usedBalance.",
-  );
-  assert.ok(
-    Number(after.balance) < Number(before.balance),
-    "The live model call did not reduce balance.",
-  );
-  const recentLogs = await relayRequest(accountUrl("/api/usage/logs", new URLSearchParams({
-    p: "1",
-    page_size: "20",
-    type: "2",
-  })));
-  assert.ok(recentLogs.items.length > 0, "No usage log appeared after the live model call.");
-  console.log(
-    `[relay-contract:live] model ${completionId || "(no id)"} debited ${
-      Number(before.balance) - Number(after.balance)
-    } credits and produced a usage log.`,
-  );
 }
 
 async function main() {
