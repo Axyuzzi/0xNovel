@@ -24,7 +24,7 @@ import DesktopUpdateNotice from "./DesktopUpdateNotice";
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "ai-novel.sidebar.collapsed";
 const WORKSPACE_RAIL_COLLAPSED_STORAGE_KEY = "ai-novel.workspace-rail.collapsed";
-const DEFAULT_APP_MAIN_CLASS_NAME = "h-[calc(100dvh-4rem)] min-w-0 flex-1 overflow-y-auto p-6";
+const DEFAULT_APP_MAIN_CLASS_NAME = "warm-ink-main h-[calc(100dvh-4rem)] min-w-0 flex-1 overflow-y-auto p-6";
 
 export default function AppLayout() {
   const location = useLocation();
@@ -36,17 +36,11 @@ export default function AppLayout() {
   const workspaceRoute = useMemo(() => {
     const setupMatch = matchPath("/novels/:id/setup", location.pathname);
     if (setupMatch?.params.id) {
-      return {
-        novelId: setupMatch.params.id,
-        chapterId: "",
-      };
+      return { novelId: setupMatch.params.id, chapterId: "" };
     }
     const editMatch = matchPath("/novels/:id/edit", location.pathname);
     if (editMatch?.params.id) {
-      return {
-        novelId: editMatch.params.id,
-        chapterId: "",
-      };
+      return { novelId: editMatch.params.id, chapterId: "" };
     }
     const chapterMatch = matchPath("/novels/:id/chapters/:chapterId", location.pathname);
     if (chapterMatch?.params.id) {
@@ -88,7 +82,7 @@ export default function AppLayout() {
   if (APP_PRODUCT_MODE === "consumer") {
     const useConsumerMobileNavigation = isMobileViewport && !isNovelWorkspace;
     return (
-      <div className="flex h-[100dvh] flex-col overflow-hidden bg-background">
+      <div className="warm-ink-shell flex h-[100dvh] flex-col overflow-hidden bg-background">
         <Navbar />
         <ConsumerOfflineBanner />
         <DesktopUpdateNotice />
@@ -99,12 +93,12 @@ export default function AppLayout() {
               onToggle={() => setIsSidebarCollapsed((current) => !current)}
             />
           ) : null}
-          <main className={isNovelWorkspace
-            ? "min-w-0 flex-1 overflow-hidden"
-            : cn(
-              DEFAULT_APP_MAIN_CLASS_NAME,
-              isMobileViewport && "h-auto p-4 pb-24",
-            )}
+          <main
+            className={
+              isNovelWorkspace
+                ? "min-w-0 flex-1 overflow-hidden"
+                : cn(DEFAULT_APP_MAIN_CLASS_NAME, isMobileViewport && "h-auto p-4 pb-24")
+            }
           >
             <Suspense fallback={<AppRouteFallback />}>
               <Outlet />
@@ -119,7 +113,7 @@ export default function AppLayout() {
   if (useMobileNovelWorkspaceLayout) {
     return (
       <TaskRecoveryProvider>
-        <div className="min-h-screen bg-background">
+        <div className="warm-ink-shell min-h-screen bg-background">
           <AutoDirectorPauseNotificationWatcher />
           <LiveExecutionDialog compact className="fixed right-3 top-3 z-50 h-9 w-9 bg-background px-0 shadow-sm" />
           <LLMSelectionBootstrap />
@@ -151,7 +145,7 @@ export default function AppLayout() {
 
   return (
     <TaskRecoveryProvider>
-      <div className="h-[100dvh] overflow-hidden bg-background">
+      <div className="warm-ink-shell h-[100dvh] overflow-hidden bg-background">
         <AutoDirectorPauseNotificationWatcher />
         <LLMSelectionBootstrap />
         <Navbar
