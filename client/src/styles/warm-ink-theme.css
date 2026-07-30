@@ -1,0 +1,132 @@
+:root {
+  --background: 42 36% 96%;
+  --foreground: 30 14% 14%;
+  --card: 42 45% 98%;
+  --card-foreground: 30 14% 14%;
+  --popover: 42 45% 98%;
+  --popover-foreground: 30 14% 14%;
+  --primary: 12 52% 38%;
+  --primary-foreground: 42 45% 98%;
+  --secondary: 38 25% 91%;
+  --secondary-foreground: 30 14% 18%;
+  --muted: 38 23% 92%;
+  --muted-foreground: 31 10% 43%;
+  --accent: 34 28% 89%;
+  --accent-foreground: 24 18% 18%;
+  --border: 33 20% 82%;
+  --input: 33 20% 82%;
+  --ring: 12 52% 38%;
+  --radius: 0.9rem;
+}
+
+body {
+  background:
+    radial-gradient(circle at top right, hsl(36 45% 92% / 0.7), transparent 30rem),
+    linear-gradient(180deg, hsl(42 38% 97%), hsl(40 30% 94%));
+  color: hsl(var(--foreground));
+  font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+}
+
+::selection {
+  background: hsl(12 52% 38% / 0.18);
+}
+
+.warm-ink-shell {
+  background:
+    linear-gradient(90deg, hsl(38 24% 90% / 0.7) 1px, transparent 1px),
+    hsl(var(--background));
+  background-size: 56px 56px;
+}
+
+.warm-ink-topbar {
+  background: hsl(42 45% 98% / 0.92);
+  border-color: hsl(var(--border) / 0.75);
+  box-shadow: 0 1px 0 hsl(30 15% 30% / 0.04);
+  backdrop-filter: blur(14px);
+}
+
+.warm-ink-sidebar {
+  background: linear-gradient(180deg, hsl(40 30% 94%), hsl(38 23% 91%));
+  border-color: hsl(var(--border) / 0.85);
+}
+
+.warm-ink-sidebar [data-nav-item="true"] {
+  border: 1px solid transparent;
+}
+
+.warm-ink-sidebar [data-nav-item="true"]:hover {
+  background: hsl(42 45% 98% / 0.72);
+  border-color: hsl(var(--border) / 0.7);
+}
+
+.warm-ink-sidebar [data-nav-active="true"] {
+  background: hsl(42 45% 98%);
+  border-color: hsl(12 42% 62% / 0.34);
+  box-shadow: 0 8px 22px hsl(30 25% 18% / 0.06);
+}
+
+.warm-ink-main {
+  background: transparent;
+}
+
+.home-workbench {
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+.home-next-action-panel {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(135deg, hsl(31 23% 20%), hsl(23 24% 14%)) !important;
+  box-shadow: 0 24px 60px hsl(25 28% 14% / 0.18) !important;
+}
+
+.home-next-action-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 86% 14%, hsl(12 64% 52% / 0.18), transparent 22rem),
+    linear-gradient(110deg, transparent 55%, hsl(42 38% 76% / 0.06));
+  pointer-events: none;
+}
+
+.home-dashboard-grid > * {
+  min-width: 0;
+}
+
+.home-attention-queue,
+.home-asset-health,
+.home-recent-novels [role="link"] {
+  border-color: hsl(var(--border) / 0.85) !important;
+}
+
+.home-attention-queue {
+  background: hsl(38 28% 91% / 0.78) !important;
+}
+
+.home-recent-novels [role="link"] {
+  background: hsl(var(--card) / 0.9);
+}
+
+.home-recent-novels [role="link"]:hover {
+  border-color: hsl(12 42% 52% / 0.45) !important;
+  box-shadow: 0 12px 30px hsl(25 24% 18% / 0.08) !important;
+}
+
+.home-status-summary-grid {
+  border-color: hsl(var(--border) / 0.8);
+}
+
+button,
+a,
+[role="button"] {
+  transition-duration: 160ms;
+}
+
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
