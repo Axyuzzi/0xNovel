@@ -9,8 +9,9 @@ import { APP_RUNTIME } from "./lib/constants";
 import AppRouter from "./router";
 import { Toaster } from "./components/ui/toast";
 import "./index.css";
+import "./styles/warm-ink-theme.css";
 import ConsumerAuthBoundary from "./features/consumerAuth/ConsumerAuthBoundary";
-import { ConsumerSessionProvider } from "./features/consumerAuth/ConsumerSessionContext";
+import { ConsumerSessionProvider } from "./features/consumerAuth/ConsumerAuthContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
